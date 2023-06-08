@@ -1,0 +1,843 @@
+---
+title: "R Notebook Zoo Task - Preprocessing"
+---
+
+This code below includes the necessary steps to combine 1) cortical 2) behavioral, and 3) clinical data from different sources 
+into one big dataset.
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. 
+
+* When you execute code within the notebook, the results appear beneath the code. Execute this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*.
+* Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+* When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+* The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+
+INSTALL NECESSARY PACKAGES:
+```{r}
+# install.packages("erp.easy")
+library(erp.easy)
+library(dplyr)
+library(Hmisc)
+```
+
+LOCATE FOLDERS:
+
+```{r}
+# Locate the folder for the EEG output files (.txt) for old and new nets, replace the file location below with the one in your local device:
+path_newnets <- "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/newnets/"
+path_oldnets <- "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/oldnets/"
+# Enter the number of participants in each group:
+subs_new <- 57
+subs_old <- 11
+```
+
+LOAD DATA:
+* Load the data from all subjects into a dataframe for each of the 4 conditions.
+* Convert all variables into factors so that the grand average function can work properly.
+* Do this separately for old nets and new nets since we will process them differently based on electrode locations (electrode numbers are different)
+* Make sure all files are 250m/s sampling rate - downsample beforehand if needed. Code would not run if a child has higher sampling rate. 
+
+```{r}
+# Load data into dataframes for each condition separately (the exported .txt files appear separately for each condition):
+neg_go <- load.data(path_newnets,"NegGo", subs_new, -100, 999) 
+neg_nogo <- load.data(path_newnets,"NegNoGo", subs_new, -100, 999)
+neut_go <- load.data(path_newnets,"NeutGo", subs_new, -100, 999)
+neut_nogo <- load.data(path_newnets,"NeutNoGo", subs_new, -100, 999)
+
+# Combine all conditions together into a single dataframe:
+combo_new <- rbind.data.frame(neg_go, neg_nogo, neut_go, neut_nogo) 
+combo_new <- as.data.frame(unclass(combo_new), stringsAsFactors=TRUE)
+
+# Repeat for old nets:
+neg_go_old <- load.data(path_oldnets,"NegGo", subs_old, -100, 999) 
+neg_nogo_old <- load.data(path_oldnets,"NegNoGo", subs_old, -100, 999)
+neut_go_old <- load.data(path_oldnets,"NeutGo", subs_old, -100, 999)
+neut_nogo_old <- load.data(path_oldnets,"NeutNoGo", subs_old, -100, 999)
+
+combo_old <- rbind.data.frame(neg_go_old, neg_nogo_old, neut_go_old, neut_nogo_old) 
+combo_old <- as.data.frame(unclass(combo_old),stringsAsFactors=TRUE)
+
+```
+
+QUESTIONS:
+1 - P2 positivity that happens around 200 ms. USE 150-300 for group average, but for the statistical analysis you need to adapt this window based on individual data - when the peak happened??? P2 IS NOT POSITIVE. GROUP MEAN FOR GRAPHS BUT ADAPTIVE MEAN FOR STATISTICAL ANALYSIS?
+2 - P2N2P3 TIME WINDOW DIFFERENT IN NOTES AND PAPERS ETC. 
+3 - ERN?
+4 - LOOK INDIVIDUAL GRAPHS
+5 - MORE REGIONS?
+
+#Although other ERP components might also relate to academic achievement in children with ASD, studies focusing on other ERP components such as N2 and P3 in kindergarten and preschool ages have resulted in mixed findings, with a handful of studies showing that N2 and/or P3 can be elicited in preschool children (e.g., Abdul Rahman, Carroll, Espy, & Wiebe, 2017; Grabell, Olson, Tardif, Thompson, & Gehring, 2017), while others found that P3 might not be present in children younger than 8-10 years of age, and N2 might be widely distributed across the frontal and parietal electrodes (Buss, Dennis, Brooker, & Sippel, 2011; Jonkman, 2006). 
+# Add talker group info to the data set using another spreadsheet:
+# individual differences in peak N2
+
+The areas we are interested in:
+FCz P2 --> we are only interested in frontal P2 (positive) (150-300) P2 is the most important one for differentiating CWS and CWNS. 
+# P2 positivity that happens around 200 ms.  (150-300)?? use 150-300 for group average, but for the statistical analysis you need to adapt this window based on individual data - when the peak happened.
+FCz N2 --> we are only interested in frontal N2 (negative)  (250-500) 
+# 250-500??? for group average.. (neg) individual differences in peak N2?
+Pz P3 --> Posterior P3 time window is: 250-600 (determined based on specific data by Hatun)
+FCz P3 --> Frontal P3 time window is: 550-850 (determined based on specific data by Hatun)
+# 250-600???
+# CWS_mean_amp_FCz_P3 = (m.measures(combo, e, window=c(550-850)))
+
+* ADAPTIVE MEANS?
+
+# Lateral (Left [F3, C3, P3], Midline [Fz, Cz, Pz], Right [F4, C4, P4]), Sagittal (Frontal [F3, Fz, F4], Central [C3, Cz, C4], Parietal [P3, Pz, P4]) 
+Rahman :mean amplitude and peak latency measures were calculated for the inhibition-related ERP components, N2 and P3.
+
+
+# Get the measures from the new net set
+# frontocentral electrodes generally exhibit a negativity (Nogo-N2) and a subsequent positivity (Nogo-P3) after Nogo in contrast to Go stimuli. 
+# In the Go trials an early frontocentral positivity (Go-P2) 
+
+# 7-12 year olds: Repeated measures ANOVAs were also used to analyse ERP amplitude data at 9 sites with Lateral (Left [F3, C3, P3], Midline [Fz, Cz, Pz], Right [F4, C4, P4]), Sagittal (Frontal [F3, Fz, F4], Central [C3, Cz, C4], Parietal [P3, Pz, P4]) and Trial Type (Successful vs. Failed for the Stop-signal task, or Go vs. Nogo for the Go/Nogo task) as within-subject factors. 
+
+# N1 (80–140 ms; locked to Fz)??
+
+# The ERP components P2 (100–250 ms), N2 (150–350 ms), and P3 (250–450 ms) of the stimulus trials were identified and quantified. The grand-average peak amplitudes and latencies of the N2 and P3 components were calculated separately at 
+# F3, Fz, F4, C3, Cz, C4, P3, Pz, and P4, and the P2 component was calculated at F3, Fz, F4, C3, Cz, and C4
+
+N2 was examined at the frontal, frontocentral and central electrode sites and was defined as the negative deflection
+in the time window between 260 and 560 ms. 
+P1 and P3 were examined at parietal electrode sites. 
+P1 was defined as a positive deflection between 60 and 150 ms, and P3 was defined as the positive deflection between 310 and 610 ms.
+
+Analyses of ERP measures, P1, N2 and P3 mean amplitude and latency were conducted for speed
+condition (Fast, Slow), trial type (Go, No-go), region (Frontal, Frontocentral, Central, and Parietal)
+and laterality (Left, Midline and Right).
+
+
+N2 NEW NETS: "V4","V5","V10","V11","V12","V16","V18","V19"
+N2 OLD NETS: "V4","V5","V10","V11","V12","V16","V19", "V20"
+P3 NEW NETS: "V54","V61","V62","V67","V72","V77","V78","V79"
+P3 OLD NETS: "V54","V61","V62","V67","V68","V73","V78","V79","V80"
+
+
+LeftF3 <-   c("V24","V27","V33")
+LeftFC <-  c("V28","V29","V34")
+LeftC <-  c("V30","V36","V41")
+LeftP3 <- c("V52","V59","V60")
+
+MidF3 <-  c("V4","V11","V19")
+MidFC <-  c("V6","V13","V112")
+MidC <-  c("V80","V31","V128")
+MidP3 <- c("V62","V67","V77")
+  
+RightF3 <- c("V122","V123","V124")
+RightFC <- c("V111","V116","V117")
+RightC <- c("V103","V104","V105")
+RightP3 <-c("V85","V91","V92")
+
+
+m.measures(combo_new_CWS, LeftF3, window=c(150,600))
+m.measures(combo_new_CWNS, LeftF3, window=c(150,600))
+m.measures(combo_new_CWS, LeftFC, window=c(150,600))
+m.measures(combo_new_CWNS, LeftFC, window=c(150,600))
+m.measures(combo_new_CWS, LeftC, window=c(150,600))
+m.measures(combo_new_CWNS, LeftC, window=c(150,600))
+m.measures(combo_new_CWS, LeftP3, window=c(150,600))
+m.measures(combo_new_CWNS, LeftP3, window=c(150,600))
+
+m.measures(combo_new_CWS, MidF3, window=c(150,600))
+m.measures(combo_new_CWNS, MidF3, window=c(150,600))
+m.measures(combo_new_CWS, MidFC, window=c(150,600))
+m.measures(combo_new_CWNS, MidFC, window=c(150,600))
+m.measures(combo_new_CWS, MidC, window=c(150,600))
+m.measures(combo_new_CWNS, MidC, window=c(150,600))
+m.measures(combo_new_CWS, MidP3, window=c(150,600))
+m.measures(combo_new_CWNS, MidP3, window=c(150,600))
+
+m.measures(combo_new_CWS, RightF3, window=c(150,600))
+m.measures(combo_new_CWNS, RightF3, window=c(150,600))
+m.measures(combo_new_CWS, RightFC, window=c(150,600))
+m.measures(combo_new_CWNS, RightFC, window=c(150,600))
+m.measures(combo_new_CWS, RightC, window=c(150,600))
+m.measures(combo_new_CWNS, RightC, window=c(150,600))
+m.measures(combo_new_CWS, RightP3, window=c(150,600))
+m.measures(combo_new_CWNS, RightP3, window=c(150,600))
+
+
+SPECIFY THE ELECTRODE NUMBERS FOR P2, N2 and P3
+```{r}
+# We are only interested in frontal P2 (positive) and N2 (negative)
+# Posterior P3 and Frontal P3
+
+p2n2_newnets <- c("V4","V5","V10","V11","V12","V16","V18","V19") 
+p2n2_oldnets <- c("V4","V5","V10","V11","V12","V16","V19", "V20")
+p3_newnets <- c("V54","V61","V62","V67","V72","V77","V78","V79") 
+p3_oldnets <- c("V54","V61","V62","V67","V68","V73","V78","V79","V80") 
+
+#Create average waveform plots for each subject in a single, multiplot window
+mosaic(combo_new, p2n2_newnets, cols = 3, rows = 2)
+mosaic(combo_new, p3_newnets, cols = 3, rows = 2)
+
+```
+
+CODE BELOW GETS ALL THE MEASURES (N2, P2, P3) FROM OLD AND NEW NET DATA, COMBINE THEM TOGETHER AND IT SAVES THE DATA INTO A FINAL COMBO SPREADSHEE:
+
+* The dependent measures we use are mean amplitude (microvolts) and latency (in ms) for statistical analysis. 
+* m.measures gives the mean amplitude for a specific window and its dt dev. along with its graph. 
+specify lgnd = "n" (no legend) if you do not want the legend 
+* p.measures calculates local or simple peak amplitude and latency for each condition in the data frame. Use latency only from p.measures
+* pol = The polarity of peaks to favor when multiple peaks are present. Entering "pos" will locate the most positive peak. Entering "neg" will locate the most negative peak. Entering "abs" will find the greatest deviation from 0, regardless of the polarity.  
+
+# CHECK THE WINDOW RANGE FOR EACH ERP COMPONENT!
+```{r}
+
+# Get the measures from the old NEW net:
+MeanAmp_P2_newnets <- (m.measures(combo_new, p2n2_newnets, window=c(150,300))) 
+MeanAmp_N2_newnets <- (m.measures(combo_new, p2n2_newnets, window=c(350,550))) 
+MeanAmp_P3_newnets <- (m.measures(combo_new, p3_newnets, window=c(450,750)))  
+
+Latency_P2_newnets <- (p.measures(combo_new, p2n2_newnets, window=c(150,300), pol="pos")) 
+Latency_N2_newnets <- (p.measures(combo_new, p2n2_newnets, window=c(350,550), pol="neg"))
+Latency_P3_newnets <- (p.measures(combo_new, p3_newnets, window=c(450,750), pol="pos"))
+
+# Combine all results together
+# You can use full_join or merge in the same way:
+
+total_new <- MeanAmp_P2_newnets %>%
+            full_join(MeanAmp_N2_newnets, by = c("Subject", "Trial Type"), suffix = c(".P2", ".N2")) %>%
+            full_join(MeanAmp_P3_newnets, by = c("Subject", "Trial Type"))  %>%
+            full_join(Latency_P2_newnets, by = c("Subject", "Trial Type"))  %>%
+            full_join(Latency_N2_newnets, by = c("Subject", "Trial Type"), suffix = c(".P2", ".N2")) %>%
+            full_join(Latency_P3_newnets, by = c("Subject", "Trial Type"))
+
+# rename the variables without any suffix here:
+# rename does not work properly unless you specify the package - some conflict:
+total_new <- total_new %>% dplyr::rename("Mean Amplitude.P3" = "Mean Amplitude",
+                                      "Standard Dev.P3" = "Standard Dev",
+                                      "Peak Latency.P3" = "Peak Latency",
+                                      "Peak Amplitude.P3" = "Peak Amplitude")
+
+
+
+
+
+# Get the measures from the old OLD net:
+MeanAmp_P2_oldnets <- (m.measures(combo_old, p2n2_oldnets, window=c(150,300))) 
+MeanAmp_N2_oldnets <- (m.measures(combo_old, p2n2_oldnets, window=c(350,550)))
+MeanAmp_P3_oldnets <- (m.measures(combo_old, p3_oldnets, window=c(450,750))) 
+
+Latency_P2_oldnets <- (p.measures(combo_old, p2n2_oldnets, window=c(150,300), pol="pos")) 
+Latency_N2_oldnets <- (p.measures(combo_old, p2n2_oldnets, window=c(350,550), pol="neg"))
+Latency_P3_oldnets <- (p.measures(combo_old, p3_oldnets, window=c(450,750), pol="pos"))
+
+# Combine all results together
+total_old <- MeanAmp_P2_oldnets %>%
+            full_join(MeanAmp_N2_oldnets, by = c("Subject", "Trial Type"), suffix = c(".P2", ".N2")) %>%
+            full_join(MeanAmp_P3_oldnets, by = c("Subject", "Trial Type"))  %>%
+            full_join(Latency_P2_oldnets, by = c("Subject", "Trial Type"))  %>%
+            full_join(Latency_N2_oldnets, by = c("Subject", "Trial Type"), suffix = c(".P2", ".N2")) %>%
+            full_join(Latency_P3_oldnets, by = c("Subject", "Trial Type"))
+
+
+# rename the variables without any suffix here:
+total_old <- total_old %>% dplyr::rename("Mean Amplitude.P3" = "Mean Amplitude",
+                            "Standard Dev.P3" = "Standard Dev",
+                            "Peak Latency.P3" = "Peak Latency",
+                            "Peak Amplitude.P3" = "Peak Amplitude")
+
+
+
+
+# Combine old and new net data together:
+combo <- full_join(total_new, total_old)
+
+# Making sure we are only adding new rows - participants
+nrow(total_new) + nrow(total_old) == nrow(combo)
+ncol(total_old) == ncol(total_new) 
+ncol(total_new) ==  ncol(combo)
+
+# Remove Grand Ave from data, order by subject name and reset the index:
+combo<-combo[!(combo$Subject=="Grand Avg"),]
+combo <- with(combo,  combo[order(Subject) , ])
+rownames(combo) <- NULL
+unique(combo[c("Subject")])
+
+# CREATE A NEW COLUMN by taking the difference between N2-P2
+combo$`N2P2avg` <- combo$`Mean Amplitude.N2` - combo$`Mean Amplitude.P2`
+combo$`N2P2peak` <- combo$`Peak Amplitude.N2` - combo$`Peak Amplitude.P2`
+
+# Write to a csv file:
+write.csv(combo, "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/combo.csv")
+head(combo)
+```
+MERGE WITH INTAKE INFO:
+* Load data exported from RedCap report, named: Age_Gender_Stuttering_LanguageScores_for_ZOO
+* Feature engineer necessary variables and merge the ERP dataset with TalkerGroup, Gender, Age info along with Stuttering and Language Scores
+
+```{r}
+# Load DataSet: 
+intake <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/CognitiveEmotionalLi-AgeGenderStuttering.csv')
+
+# Subject IDs include the visit number in the combo dataset if it is NOT the first time point. 
+# Do the same here: Combine visit number with subject and create a new Subject variable so that it matches the combo:
+intake <- intake  %>%
+  mutate(Subject = ifelse(visitnumber != 1, paste0(part_id_status, "T", visitnumber), part_id_status)) 
+
+# Calculate the month difference using BIRTHDATE and CVE date to make sure the autocalculator is correct:
+# Install and load the lubridate package
+# install.packages("lubridate")
+library(lubridate)
+
+# the %/% operator is used to perform the floor division of the interval by months(1), which represents one month.
+intake$month_diff <- interval(intake$date_birth, intake$cve_date) %/% months(1)
+print(intake$month_diff)
+print(round(intake$calculator_age_cve))
+# Not a big difference between the hand calculated and auto calculated field. Let's use "calculator_age_cve"
+
+# Create a new variable representing the sldper100words ("disfluency_sldper100words_final) by taking disfluency_sldper100words from CVD as primary, however in the case it is missing, then take the scores from CVE:
+intake <- intake  %>%
+  mutate(disfluency_sldper100words_final = ifelse(!is.na(disfluency_sldper100words), disfluency_sldper100words, disfluency_sldper100words_cve)) 
+
+# Create a new variable representing the talkergroup based on disfluency ("talkergroup_disfluency_final")
+# If the scores are higher then 3, it is 1 (CWS), otherwise 0 (CWNS)
+intake <- intake  %>%
+  mutate(talkergroup_disfluency_final = ifelse(disfluency_sldper100words_final >= 3, 1, 0)) 
+
+# Create a final talker group categorization variable ("talkergroup_final) using both talker group classification using SLD counts and parent report:
+# 1: CWS, 0:CWNS, 9:unidentified
+intake <- intake  %>%
+  mutate(talkergroup_final = ifelse(talkergroup_disfluency_final == 1 | calculator_talkergroup_parent == 1, 1,
+                                          ifelse(talkergroup_disfluency_final == 0 & calculator_talkergroup_parent == 0, 0, 9)))  
+
+# ignoring the NA's:
+# intake <- intake  %>%                                           
+# mutate(talkergroup_overall_final = ifelse((!is.na(talkergroup_disfluency_final) & talkergroup_disfluency_final == 1) | 
+#                                          (!is.na(calculator_talkergroup_parent) & calculator_talkergroup_parent == 1), 1,
+#                                         ifelse((!is.na(talkergroup_disfluency_final) & talkergroup_disfluency_final == & 
+#                                               (!is.na(calculator_talkergroup_parent) & calculator_talkergroup_parent == 0), 0, 9)))
+
+# Take the relevant columns from intake dataset
+# You may update this to take more columns into the dataset:
+intake <-  subset(intake, select=c('Subject','calculator_age_cve','calculator_gender_cve','calculator_talkergroup_parent',    
+                                   'disfluency_sldper100words_final', 'talkergroup_disfluency_final','talkergroup_final',
+                                   "gfta_standard", "ppvt_standard", "evt_standard",             
+                                   "teld_rec_standard","teld_exp_standard", "teld_spokenlang_standard"))
+
+
+# Merge with the main dataset using SUBJECT
+FULL <- merge(combo, intake, by=c("Subject"))
+head(FULL)  
+
+```
+
+```{r}
+# Check the subject numbers with missing stuttering assessments:
+rows_with_null <- FULL[is.na(FULL$ssi_total) | is.na(FULL$disfluency_sldper100words) | is.na(FULL$ssi_severity), ] 
+# | is.na(FULL_2$calculator_talkergroup_parent) makes no difference
+rows_with_null
+unique(rows_with_null$Subject)
+
+
+
+```
+
+
+
+
+
+
+```{r}
+# Create a new subset with ONLY good data:
+
+combo_good <- dplyr::filter(combo, Subject!="AE050318", Subject!="AL090917", Subject!="ES031519", Subject!="LS100617", Subject!="LG100721", Subject!="MS102319", Subject!="PB021519", Subject!="RT032219")
+
+combo_good
+
+
+
+
+
+
+
+
+
+```
+
+LOAD AND WORK WITH BEHAVIORAL DATA:
+
+```{r}
+
+accuracy <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/Merged_Zoo_05.18.23.csv')
+
+accuracy <-  subset(accuracy, select=c('Name','VisitNumber','ShowStim.ACC','ShowStim.RESP','ShowStim.RT','StimTag'))
+
+# for No Accuracy and Go Accuracy use ShowStim.RESP if 4 it means the child pushed the button, if NA it means no response. 
+
+# See the class types for each variable. 
+sapply(accuracy, class)
+print(class(accuracy$ShowStim.RESP))
+# Convert character 4 for ShowStim.RESP to integer
+# accuracy$ShowStim.RESP <- as.integer(accuracy$ShowStim.RESP)
+# sapply(accuracy, class)
+
+
+# Creating a new ACCURACY column based on Go or NoGo conditions. 
+
+accuracy <- accuracy %>%
+  filter((StimTag == 'negN' | StimTag == 'neuN') |
+         (StimTag == 'negG' | StimTag == 'neuG')) %>%
+  mutate(accuracy = case_when(
+    (StimTag == 'negN' | StimTag == 'neuN') & ShowStim.RESP == '4' ~ 0,
+    (StimTag == 'negN' | StimTag == 'neuN') & TRUE ~ 1,
+    (StimTag == 'negG' | StimTag == 'neuG') & ShowStim.RESP == '4' ~ 1,
+    (StimTag == 'negG' | StimTag == 'neuG') & TRUE ~ 0
+  ))
+
+########### 
+short_RT <- accuracy$ShowStim.RT < 148
+filtered_data <- accuracy[short_RT, ] # ZERO ROWS WITH RT LOWER THAN 148ms!!
+summary(accuracy)
+
+accuracy <- accuracy %>%
+  filter((ShowStim.RT > 148 & (StimTag == 'negN' | StimTag == 'neuN')) |
+         (ShowStim.RT > 148 & (StimTag == 'negG' | StimTag == 'neuG'))) %>%
+  mutate(accuracy_filtered = case_when(
+    (ShowStim.RT > 148 & (StimTag == 'negN' | StimTag == 'neuN'))  & ShowStim.RESP == '4' ~ 0,
+    (ShowStim.RT > 148 & (StimTag == 'negN' | StimTag == 'neuN'))  & TRUE ~ 1,
+    (ShowStim.RT > 148 & (StimTag == 'negG' | StimTag == 'neuG')) & ShowStim.RESP == '4' ~ 1,
+    (ShowStim.RT > 148 & (StimTag == 'negG' | StimTag == 'neuG')) & TRUE ~ 0
+    ))
+
+discrepancies <- accuracy$accuracy != accuracy$accuracy_filtered
+discrepancy_rows <- which(discrepancies)
+print(discrepancy_rows)
+################################ ALL MATCH
+
+# calculate ACCURACY PERCENTAGE
+accuracy_percent <- accuracy %>%
+  group_by(Name, VisitNumber, StimTag) %>%
+  dplyr::summarize(accuracy_percentage = mean(accuracy) * 100)
+
+# calculate REACTION TIME for GO only
+reaction_time <- accuracy %>%
+  filter(accuracy == 1 & (StimTag == 'negG' | StimTag == 'neuG')) %>%
+  group_by(Name, VisitNumber,StimTag) %>%
+  dplyr::summarize(reaction_time = mean(ShowStim.RT))
+  
+
+# COMBINE THE DATASETS
+
+eprime <- full_join(accuracy_percent, reaction_time, by=c("Name", "VisitNumber", "StimTag"))
+
+# Replace the names to be able to merge with main dataset
+# combo$StimTag <- combo$`Trial Type`
+# eprime$Subject <- 	eprime$Name
+
+combo <- combo %>% 
+  rename("StimTag" = "Trial Type")
+
+# Combine visit number with subject and create a new Subject variable for eprime so that it matches the combo
+eprime <- eprime  %>% 
+  mutate(Subject = ifelse(VisitNumber != 1, paste0(Name, "T", VisitNumber), Name)) 
+
+# Rename the labels for StimTags on eprime data
+
+eprime <- eprime %>% 
+  mutate(StimTag = recode(StimTag, "negG" = "NegGo", "negN" = "NegNoGo", "neuG" = "NeutGo", "neuN" = "NeutNoGo"))
+
+
+# Ungroup the dataframe first
+eprime <- ungroup(eprime)
+# Drop name and Visitnumber
+eprime <- select(eprime, -Name, -VisitNumber)
+
+# COMBINE ALL!!
+FULL <- merge(combo, eprime, by=c("Subject", "StimTag"))
+
+write.csv(FULL, "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/FULL.csv")
+
+```
+
+
+LOAD AND ADD Gender Age Stuttering Language scores:
+
+```{r}
+
+
+```
+
+ADD AGE INFORMATION
+
+```{r}
+
+
+
+
+
+
+
+
+
+
+
+
+```
+
+
+SUBSET DATA WITH HIGHER ACCURACY!
+
+```{r}
+zoo <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/FULL.csv')
+
+zoo_good <- subset(zoo, accuracy_percentage > 75)
+filtered_rows <- zoo[zoo$accuracy_percentage < 75, ]
+
+nrow(zoo)
+nrow(zoo_good)
+
+summary(zoo$accuracy_percentage)
+
+
+```
+
+# Add talker group info to the data set using another spreadsheet:
+groups <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/subject_talkergroup.csv')
+combo <- full_join(combo, groups, by=c("Subject"))
+
+
+groups <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/subject_talkergroup.csv')
+combo_new_groups <- full_join(combo_new, groups, by=c("Subject"))
+write.csv(combo_new_groups, "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/combo.csv")
+combo_new_groups <- na.omit(combo_new_groups)
+head(combo_new_groups)
+
+combo_new_CWS <- dplyr::filter(combo_new_groups, Group=="CWS")
+combo_new_CWS <- as.data.frame(unclass(combo_new_CWS), stringsAsFactors=TRUE)
+m.measures(combo_new_CWS, p2n2_newnets, window=c(150,550))
+m.measures(combo_new_CWS, p3_newnets, window=c(450,850))
+
+
+combo_new_CWNS <- dplyr::filter(combo_new_groups, Group=="CWNS")
+combo_new_CWNS <- as.data.frame(unclass(combo_new_CWNS), stringsAsFactors=TRUE)
+m.measures(combo_new_CWNS, p2n2_newnets, window=c(150,550))
+m.measures(combo_new_CWNS, p3_newnets, window=c(450,850))
+
+SUBSET BY AGE!
+
+```{r}
+
+
+
+
+
+```
+
+
+
+
+LINE PLOTS
+```{r}
+
+library(Rmisc);
+combo <- as.data.frame(unclass(combo), stringsAsFactors=TRUE)
+
+summary <- summarySE(combo, measurevar=c("Mean.Amplitude.P2"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Mean.Amplitude.P2, fill=Group)) + 
+geom_bar(stat="identity", color="black", position=position_dodge()) +
+geom_errorbar(aes(ymin = Mean.Amplitude.P2-se, ymax = Mean.Amplitude.P2+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="P2 Amplitude\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none")
+
+## EXTRA GGPLOT FEATURES:
+# scale_y_continuous(limits = c(-0.2, 0.8), breaks = c(-0.2, 0, 0.2, 0.4, 0.6, 0.8)) +
+# ggsave("/Users/aysuerdemir/Desktop/R workspace/Myplots/boxplot7_fromdescriptivedata.png", dpi=300, units="in", height=6, width=8)
+# theme <- 
+#    legend.title = element_text(family="Arial", color = "grey20", size = 18, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+#    legend.text = element_text(family="Arial", color = "grey20", size = 18, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+#    legend.title.align = 0, legend.text.align = 0)
+
+```
+
+
+```{r}
+combo_good <- as.data.frame(unclass(combo_good), stringsAsFactors=TRUE)
+
+summary <- summarySE(combo, measurevar=c("Mean.Amplitude.P2"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Mean.Amplitude.P2, fill=Group)) + 
+geom_bar(stat="identity", color="black", fill="lightblue", position=position_dodge()) +
+geom_errorbar(aes(ymin = Mean.Amplitude.P2-se, ymax = Mean.Amplitude.P2+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="P2 Amplitude\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none")
+```
+
+
+
+```{r}
+
+summary <- summarySE(combo, measurevar=c("Mean.Amplitude.N2"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Mean.Amplitude.N2, fill=Group)) + 
+geom_bar(stat="identity", color="black", position=position_dodge()) +
+geom_errorbar(aes(ymin = Mean.Amplitude.N2-se, ymax = Mean.Amplitude.N2+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="N2 Amplitude\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none")
+```
+
+```{r}
+summary <- summarySE(combo_good, measurevar=c("Mean.Amplitude.N2"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Mean.Amplitude.N2, fill=Group)) + 
+geom_bar(stat="identity", color="black", fill="lightblue", position=position_dodge()) +
+geom_errorbar(aes(ymin = Mean.Amplitude.N2-se, ymax = Mean.Amplitude.N2+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="N2 Amplitude\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none")
+
+```
+
+
+
+```{r}
+
+summary <- summarySE(combo, measurevar=c("N2P2avg"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=N2P2avg, fill=Group)) + 
+geom_bar(stat="identity", color="black", position=position_dodge()) +
+geom_errorbar(aes(ymin = N2P2avg-se, ymax = N2P2avg+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="N2-P2 avg\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none")
+
+
+```
+```{r}
+summary <- summarySE(combo_good, measurevar=c("N2P2avg"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=N2P2avg, fill=Group)) + 
+geom_bar(stat="identity", color="black", fill="lightblue", position=position_dodge()) +
+geom_errorbar(aes(ymin = N2P2avg-se, ymax = N2P2avg+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="N2-P2 avg\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none")
+
+```
+
+
+
+```{r}
+summary <- summarySE(combo, measurevar=c("N2P2peak"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=N2P2peak, fill=Group)) + 
+geom_bar(stat="identity", color="black", position=position_dodge()) +
+geom_errorbar(aes(ymin = N2P2peak-se, ymax = N2P2peak+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="N2-P2 peak\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none")
+
+```
+```{r}
+summary <- summarySE(combo_good, measurevar=c("N2P2peak"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=N2P2peak, fill=Group)) + 
+geom_bar(stat="identity", color="black",fill="lightblue",  position=position_dodge()) +
+geom_errorbar(aes(ymin = N2P2peak-se, ymax = N2P2peak+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="N2-P2 peak\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none")
+
+```
+
+
+
+```{r}
+
+summary <- summarySE(combo, measurevar=c("Mean.Amplitude.P3"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Mean.Amplitude.P3, fill=Group)) + 
+geom_bar(stat="identity", color="black", position=position_dodge()) +
+geom_errorbar(aes(ymin = Mean.Amplitude.P3-se, ymax = Mean.Amplitude.P3+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="P3 Amplitude\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none")
+```
+
+```{r}
+summary <- summarySE(combo_good, measurevar=c("Mean.Amplitude.P3"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Mean.Amplitude.P3, fill=Group)) + 
+geom_bar(stat="identity", color="black", fill="lightblue", position=position_dodge()) +
+geom_errorbar(aes(ymin = Mean.Amplitude.P3-se, ymax = Mean.Amplitude.P3+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="P3 Amplitude\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none")
+```
+
+
+
+```{r}
+summary <- summarySE(combo, measurevar=c("Peak.Latency.N2"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Peak.Latency.N2, fill=Group) ) + 
+geom_bar(stat="identity", color="black", position=position_dodge()) +
+geom_errorbar(aes(ymin = Peak.Latency.N2-se, ymax = Peak.Latency.N2+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="Peak.Latency.N2\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none") +
+coord_cartesian(ylim = c(300, 500)) 
+
+```
+```{r}
+summary <- summarySE(combo_good, measurevar=c("Peak.Latency.N2"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Peak.Latency.N2, fill=Group) ) + 
+geom_bar(stat="identity", color="black", fill="lightblue", position=position_dodge()) +
+geom_errorbar(aes(ymin = Peak.Latency.N2-se, ymax = Peak.Latency.N2+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="Peak.Latency.N2\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none") +
+coord_cartesian(ylim = c(300, 500)) 
+
+```
+
+
+
+
+```{r}
+summary <- summarySE(combo, measurevar=c("Peak.Latency.P2"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Peak.Latency.P2, fill=Group) ) + 
+geom_bar(stat="identity", color="black", position=position_dodge()) +
+geom_errorbar(aes(ymin = Peak.Latency.P2-se, ymax = Peak.Latency.P2+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="Peak.Latency.P2\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none") 
+```
+```{r}
+summary <- summarySE(combo_good, measurevar=c("Peak.Latency.P2"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Peak.Latency.P2, fill=Group) ) + 
+geom_bar(stat="identity", color="black", fill="lightblue", position=position_dodge()) +
+geom_errorbar(aes(ymin = Peak.Latency.P2-se, ymax = Peak.Latency.P2+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="Peak.Latency.P2\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none") 
+
+```
+
+
+```{r}
+
+summary <- summarySE(combo, measurevar=c("Peak.Latency.P3"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Peak.Latency.P3, fill=Group) ) + 
+geom_bar(stat="identity", color="black", position=position_dodge()) +
+geom_errorbar(aes(ymin = Peak.Latency.P3-se, ymax = Peak.Latency.P3+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="Peak.Latency.P3\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none") +
+coord_cartesian(ylim = c(200, 650)) 
+
+```
+
+```{r}
+summary <- summarySE(combo_good, measurevar=c("Peak.Latency.P3"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Peak.Latency.P3, fill=Group) ) + 
+geom_bar(stat="identity", color="black", fill="lightblue", position=position_dodge()) +
+geom_errorbar(aes(ymin = Peak.Latency.P3-se, ymax = Peak.Latency.P3+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="Peak.Latency.P3\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none") +
+coord_cartesian(ylim = c(200, 650)) 
+
+```
+
+```{r}
+summary <- summarySE(combo, measurevar=c("Standard.Dev.P2"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Standard.Dev.P2, fill=Group) ) + 
+geom_bar(stat="identity", color="black", position=position_dodge()) +
+geom_errorbar(aes(ymin = Standard.Dev.P2-se, ymax = Standard.Dev.P2+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="Standard.Dev.P2\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none") 
+
+```
+```{r}
+summary <- summarySE(combo, measurevar=c("Standard.Dev.N2"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Standard.Dev.N2, fill=Group) ) + 
+geom_bar(stat="identity", color="black", position=position_dodge()) +
+geom_errorbar(aes(ymin = Standard.Dev.N2-se, ymax = Standard.Dev.N2+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="Standard.Dev.N2\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none") 
+```
+
+```{r}
+summary <- summarySE(combo, measurevar=c("Standard.Dev.P3"), groupvars=c("Trial.Type","Group"))
+    
+ggplot(summary, aes(x=Trial.Type, y=Standard.Dev.P3, fill=Group) ) + 
+geom_bar(stat="identity", color="black", position=position_dodge()) +
+geom_errorbar(aes(ymin = Standard.Dev.P3-se, ymax = Standard.Dev.P3+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~Group) + 
+theme_classic() + labs(y="Standard.Dev.P3\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none") 
+```
+
