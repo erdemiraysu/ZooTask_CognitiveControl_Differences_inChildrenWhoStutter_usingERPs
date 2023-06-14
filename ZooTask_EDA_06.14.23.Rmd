@@ -1,0 +1,133 @@
+---
+title: "ZooTask_EDA_06.14.23"
+output: html_document
+date: '2023-06-14'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r}
+ZOO <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/ZOO.csv')
+
+```
+# LINE PLOTS -  FUNCTION TO AUTOMATE THE PROCESS:
+* This function gives a summary bar graph by taking data and measurevar as input. 
+* Data: the data frame, measurevar: The target dependent variable we are interested in.
+
+```{r}
+library(Rmisc);
+library(ggplot2);
+
+create_summary_plot <- function(data, measurevar) {
+  # Converts the data object into a data frame, while ensuring that character variables are treated as factors in the data frame:
+  data <- as.data.frame(unclass(data), stringsAsFactors = TRUE)
+  # Get summary statistics for each StimTag and TalkerGroup:
+  summary <- summarySE(data, measurevar = measurevar, groupvars = c("StimTag", "talkergroup_final"))
+  
+  # Generate the summary plot using ggplot2:
+  # By using !!rlang::sym(measurevar), we convert the measurevar string into a symbol that can be evaluated in the context of the     # ggplot aesthetics. This allows the measurevar parameter to be dynamically incorporated into the plot.
+  # The gsub function searches for dots (\\.) and replaces them with spaces.
+  # This code would directly paste the var name: labs(y = paste0(measurevar, "\n"), x = "\nCondition") 
+  
+  plot <- ggplot(summary, aes(x = StimTag, y = !!rlang::sym(measurevar), fill = talkergroup_final)) +
+    geom_bar(stat = "identity", color = "black", position = position_dodge()) +
+    geom_errorbar(aes(ymin = !!rlang::sym(measurevar) - se, ymax = !!rlang::sym(measurevar) + se),
+                  width = 0.2, position = position_dodge(.9)) +
+    facet_wrap(~ talkergroup_final) +
+    theme_classic() +
+    labs(y = gsub("\\.", " ", measurevar), x = "\nCondition") + 
+    theme(axis.title.x = element_text(family = "Arial", color = "grey20", size = 12, angle = 0), 
+          axis.title.y = element_text(family = "Arial", color = "grey20", size = 12, angle = 90),
+          strip.text.x = element_text(family = "Arial", color = "grey20", size = 10, angle = 0),
+          legend.position = "none")
+  
+  # Return the generated plot
+  return(plot)
+}
+
+## EXTRA GGPLOT FEATURES:
+# scale_y_continuous(limits = c(-0.2, 0.8), breaks = c(-0.2, 0, 0.2, 0.4, 0.6, 0.8)) +
+# ggsave("/Users/aysuerdemir/Desktop/R workspace/Myplots/boxplot7_fromdescriptivedata.png", dpi=300, units="in", height=6, width=8)
+# theme <- 
+#    legend.title = element_text(family="Arial", color = "grey20", size = 18, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+#    legend.text = element_text(family="Arial", color = "grey20", size = 18, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+#    legend.title.align = 0, legend.text.align = 0)
+
+```
+
+# DRAW THE PLOTS USING THE FUNCTION ABOVE:
+```{r}
+summary_plot_P2 <- create_summary_plot(data = ZOO, measurevar = "Mean.Amplitude.P2")
+print(summary_plot_P2)
+```
+
+```{r}
+summary_plot_N2 <- create_summary_plot(data = ZOO, measurevar = "Mean.Amplitude.N2")
+print(summary_plot_N2)
+```
+
+```{r}
+summary_plot_N2P2avg <- create_summary_plot(data = ZOO, measurevar = "N2P2avg")
+print(summary_plot_N2P2avg)
+```
+
+```{r}
+summary_plot_N2P2peak <- create_summary_plot(data = ZOO, measurevar = "N2P2peak")
+print(summary_plot_N2P2peak)
+```
+
+```{r}
+summary_plot_P3 <- create_summary_plot(data = ZOO, measurevar = "Mean.Amplitude.P3")
+print(summary_plot_P3)
+```
+
+```{r}
+ZOO <- as.data.frame(unclass(ZOO), stringsAsFactors = TRUE)
+summary <- summarySE(ZOO, measurevar=c("Peak.Latency.N2"), groupvars=c("StimTag","talkergroup_final"))
+    
+ggplot(summary, aes(x=StimTag, y=Peak.Latency.N2, fill=talkergroup_final) ) + 
+geom_bar(stat="identity", color="black", position=position_dodge()) +
+geom_errorbar(aes(ymin = Peak.Latency.N2-se, ymax = Peak.Latency.N2+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~talkergroup_final) + 
+theme_classic() + labs(y="Peak.Latency.N2\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none") +
+coord_cartesian(ylim = c(300, 500)) 
+
+```
+
+```{r}
+summary_plot_P2_Latency <- create_summary_plot(data = ZOO, measurevar = "Peak.Latency.P2")
+print(summary_plot_P2_Latency)
+```
+
+```{r}
+summary_plot_P3_Latency <- create_summary_plot(data = ZOO, measurevar = "Peak.Latency.P3")
+print(summary_plot_P3_Latency)
+# coord_cartesian(ylim = c(200, 650)) 
+```
+
+```{r}
+summary_plot_P2_StDev <- create_summary_plot(data = ZOO, measurevar = "Standard.Dev.P2")
+print(summary_plot_P2_StDev)
+
+```
+
+```{r}
+summary_plot_N2_StDev <- create_summary_plot(data = ZOO, measurevar = "Standard.Dev.N2")
+print(summary_plot_N2_StDev)
+```
+
+```{r}
+summary_plot_P3_StDev <- create_summary_plot(data = ZOO, measurevar = "Standard.Dev.P3")
+print(summary_plot_P3_StDev)
+```
