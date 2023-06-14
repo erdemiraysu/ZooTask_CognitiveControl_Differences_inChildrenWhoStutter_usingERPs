@@ -13,6 +13,15 @@ This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook.
 * The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
 
 
+---
+title: "Exploring many variaables"
+author: "Shankar"
+date: "October 2, 2016"
+output:  
+  html_document:
+    keep_md: true
+---
+
 INSTALL NECESSARY PACKAGES:
 ```{r}
 # install.packages("erp.easy")
@@ -176,6 +185,7 @@ intake <- intake  %>%
 # Calculate the month difference using BIRTHDATE and CVE date to make sure the autocalculator is correct:
 # Install and load the lubridate package
 # install.packages("lubridate")
+
 library(lubridate)
 
 # the %/% operator is used to perform the floor division of the interval by months(1), which represents one month.
@@ -202,6 +212,7 @@ intake <- intake  %>%
 #                                         ifelse((!is.na(talkergroup_disfluency_final) & talkergroup_disfluency_final == & 
 #                                               (!is.na(calculator_talkergroup_parent) & calculator_talkergroup_parent == 0), 0, 9)))
 
+
 # Take the relevant columns from intake dataset
 # You may update this to take more columns into the dataset:
 intake <-  subset(intake, select=c('Subject','calculator_age_cve','calculator_gender_cve',
@@ -218,16 +229,33 @@ head(FULL)
 
 ```
 
+FIND THE UNDEFINED (9) TALKER GROUPS AND MANUALLY MARK THEM AS EITHER 1 or 0:
 ```{r}
+
 # Check the subject numbers with missing stuttering assessments:
 rows_with_null <- FULL[is.na(FULL$disfluency_sldper100words) | is.na(FULL$ssi_total) | is.na(FULL$ssi_severity), ] 
 # | is.na(FULL_2$calculator_talkergroup_parent) makes no difference
 unique(rows_with_null$Subject)
+
+# Show the rows where talkergroup_final = 9 or NA :
+short_RT_rows <- subset(FULL, talkergroup_final == 9 |  is.na(talkergroup_final))
+short_RT_rows
+
+# MANUALLY LABEL THE TALKERGROUP FOR NA's:
+# LW102219T3 == 0 because there is a record of a disflunecy count of 0, although no parent report available. 
+# SA072518 == 0, there is no indication in RedCap that the child stutterss
+
+# Replace NA values in a specific column based on a condition:
+FULL$talkergroup_final <- ifelse(FULL$Subject == "LW102219T3" & is.na(FULL$talkergroup_final), 0, FULL$talkergroup_final)
+FULL$talkergroup_final <- ifelse(FULL$Subject == "SA072518" & is.na(FULL$talkergroup_final), 0, FULL$talkergroup_final)
+
+# Making sure no 9 or NA remained:
+any(FULL$talkergroup_final == 9 | is.na(FULL$talkergroup_final))
 ```
 
 YOU CAN CREATE A NEW SUBSET WITH ONLY GOOD DATA HERE:
 ```{r}
-# Create a new subset with ONLY good data:
+# Create a new subset with ONLY good data, by removing those participants you identified as having bad data:
 combo_good <- dplyr::filter(combo, Subject!="AE050318", Subject!="AL090917", Subject!="ES031519", Subject!="LS100617", Subject!="LG100721", Subject!="MS102319", Subject!="PB021519", Subject!="RT032219")
 
 head(combo_good)
@@ -317,7 +345,8 @@ FULL <- FULL %>%
 
 # COMBINE ALL!!
 ZOO <- merge(FULL, eprime, by=c("Subject", "StimTag"))
-write.csv(Final, "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/ZOO.csv")
+head(ZOO)
+write.csv(ZOO, "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/ZOO.csv")
 
 ```
 
@@ -364,7 +393,7 @@ create_summary_plot <- function(data, measurevar) {
     facet_wrap(~ talkergroup_final) +
     theme_classic() +
     labs(y = gsub("\\.", " ", measurevar), x = "\nCondition") + 
-    theme(axis.title.x = element_text(family = "Arial", color = "grey20", size = 12, angle = 0),
+    theme(axis.title.x = element_text(family = "Arial", color = "grey20", size = 12, angle = 0), 
           axis.title.y = element_text(family = "Arial", color = "grey20", size = 12, angle = 90),
           strip.text.x = element_text(family = "Arial", color = "grey20", size = 10, angle = 0),
           legend.position = "none")
@@ -373,8 +402,6 @@ create_summary_plot <- function(data, measurevar) {
   return(plot)
 }
 
-summary_plot <- create_summary_plot(data = ZOO, measurevar = "Mean.Amplitude.P2")
-print(summary_plot)
 
 ## EXTRA GGPLOT FEATURES:
 # scale_y_continuous(limits = c(-0.2, 0.8), breaks = c(-0.2, 0, 0.2, 0.4, 0.6, 0.8)) +
@@ -386,169 +413,40 @@ print(summary_plot)
 
 ```
 
+DRAW THE PLOTS USING THE FUNCTION ABOVE:
+```{r}
+summary_plot_P2 <- create_summary_plot(data = ZOO, measurevar = "Mean.Amplitude.P2")
+print(summary_plot_P2)
+```
 
 ```{r}
 summary_plot_N2 <- create_summary_plot(data = ZOO, measurevar = "Mean.Amplitude.N2")
 print(summary_plot_N2)
 ```
 
-
-
 ```{r}
-
-summary <- summarySE(combo, measurevar=c("Mean.Amplitude.N2"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=Mean.Amplitude.N2, fill=Group)) + 
-geom_bar(stat="identity", color="black", position=position_dodge()) +
-geom_errorbar(aes(ymin = Mean.Amplitude.N2-se, ymax = Mean.Amplitude.N2+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="N2 Amplitude\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none")
+summary_plot_N2P2avg <- create_summary_plot(data = ZOO, measurevar = "N2P2avg")
+print(summary_plot_N2P2avg)
 ```
 
 ```{r}
-summary <- summarySE(combo_good, measurevar=c("Mean.Amplitude.N2"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=Mean.Amplitude.N2, fill=Group)) + 
-geom_bar(stat="identity", color="black", fill="lightblue", position=position_dodge()) +
-geom_errorbar(aes(ymin = Mean.Amplitude.N2-se, ymax = Mean.Amplitude.N2+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="N2 Amplitude\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none")
-
-```
-
-
-
-```{r}
-
-summary <- summarySE(combo, measurevar=c("N2P2avg"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=N2P2avg, fill=Group)) + 
-geom_bar(stat="identity", color="black", position=position_dodge()) +
-geom_errorbar(aes(ymin = N2P2avg-se, ymax = N2P2avg+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="N2-P2 avg\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none")
-
-
-```
-
-
-
-
-```{r}
-summary <- summarySE(combo_good, measurevar=c("N2P2avg"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=N2P2avg, fill=Group)) + 
-geom_bar(stat="identity", color="black", fill="lightblue", position=position_dodge()) +
-geom_errorbar(aes(ymin = N2P2avg-se, ymax = N2P2avg+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="N2-P2 avg\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none")
-
-```
-
-
-
-```{r}
-summary <- summarySE(combo, measurevar=c("N2P2peak"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=N2P2peak, fill=Group)) + 
-geom_bar(stat="identity", color="black", position=position_dodge()) +
-geom_errorbar(aes(ymin = N2P2peak-se, ymax = N2P2peak+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="N2-P2 peak\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none")
-
-```
-
-
-```{r}
-summary <- summarySE(combo_good, measurevar=c("N2P2peak"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=N2P2peak, fill=Group)) + 
-geom_bar(stat="identity", color="black",fill="lightblue",  position=position_dodge()) +
-geom_errorbar(aes(ymin = N2P2peak-se, ymax = N2P2peak+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="N2-P2 peak\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none")
-
-```
-
-
-
-```{r}
-
-summary <- summarySE(combo, measurevar=c("Mean.Amplitude.P3"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=Mean.Amplitude.P3, fill=Group)) + 
-geom_bar(stat="identity", color="black", position=position_dodge()) +
-geom_errorbar(aes(ymin = Mean.Amplitude.P3-se, ymax = Mean.Amplitude.P3+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="P3 Amplitude\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none")
+summary_plot_N2P2peak <- create_summary_plot(data = ZOO, measurevar = "N2P2peak")
+print(summary_plot_N2P2peak)
 ```
 
 ```{r}
-summary <- summarySE(combo_good, measurevar=c("Mean.Amplitude.P3"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=Mean.Amplitude.P3, fill=Group)) + 
-geom_bar(stat="identity", color="black", fill="lightblue", position=position_dodge()) +
-geom_errorbar(aes(ymin = Mean.Amplitude.P3-se, ymax = Mean.Amplitude.P3+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="P3 Amplitude\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none")
+summary_plot_P3 <- create_summary_plot(data = ZOO, measurevar = "Mean.Amplitude.P3")
+print(summary_plot_P3)
 ```
 
-
-
 ```{r}
-summary <- summarySE(combo, measurevar=c("Peak.Latency.N2"), groupvars=c("Trial.Type","Group"))
+ZOO <- as.data.frame(unclass(ZOO), stringsAsFactors = TRUE)
+summary <- summarySE(ZOO, measurevar=c("Peak.Latency.N2"), groupvars=c("StimTag","talkergroup_final"))
     
-ggplot(summary, aes(x=Trial.Type, y=Peak.Latency.N2, fill=Group) ) + 
+ggplot(summary, aes(x=StimTag, y=Peak.Latency.N2, fill=talkergroup_final) ) + 
 geom_bar(stat="identity", color="black", position=position_dodge()) +
 geom_errorbar(aes(ymin = Peak.Latency.N2-se, ymax = Peak.Latency.N2+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="Peak.Latency.N2\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none") +
-coord_cartesian(ylim = c(300, 500)) 
-
-```
-```{r}
-summary <- summarySE(combo_good, measurevar=c("Peak.Latency.N2"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=Peak.Latency.N2, fill=Group) ) + 
-geom_bar(stat="identity", color="black", fill="lightblue", position=position_dodge()) +
-geom_errorbar(aes(ymin = Peak.Latency.N2-se, ymax = Peak.Latency.N2+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
+facet_wrap(~talkergroup_final) + 
 theme_classic() + labs(y="Peak.Latency.N2\n", x = "\nCondition") +
 theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
       axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
@@ -558,110 +456,36 @@ coord_cartesian(ylim = c(300, 500))
 
 ```
 
-
-
-
 ```{r}
-summary <- summarySE(combo, measurevar=c("Peak.Latency.P2"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=Peak.Latency.P2, fill=Group) ) + 
-geom_bar(stat="identity", color="black", position=position_dodge()) +
-geom_errorbar(aes(ymin = Peak.Latency.P2-se, ymax = Peak.Latency.P2+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="Peak.Latency.P2\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none") 
-```
-```{r}
-summary <- summarySE(combo_good, measurevar=c("Peak.Latency.P2"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=Peak.Latency.P2, fill=Group) ) + 
-geom_bar(stat="identity", color="black", fill="lightblue", position=position_dodge()) +
-geom_errorbar(aes(ymin = Peak.Latency.P2-se, ymax = Peak.Latency.P2+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="Peak.Latency.P2\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none") 
-
+summary_plot_P2_Latency <- create_summary_plot(data = ZOO, measurevar = "Peak.Latency.P2")
+print(summary_plot_P2_Latency)
 ```
 
+```{r}
+summary_plot_P3_Latency <- create_summary_plot(data = ZOO, measurevar = "Peak.Latency.P3")
+print(summary_plot_P3_Latency)
+# coord_cartesian(ylim = c(200, 650)) 
+```
 
 ```{r}
-
-summary <- summarySE(combo, measurevar=c("Peak.Latency.P3"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=Peak.Latency.P3, fill=Group) ) + 
-geom_bar(stat="identity", color="black", position=position_dodge()) +
-geom_errorbar(aes(ymin = Peak.Latency.P3-se, ymax = Peak.Latency.P3+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="Peak.Latency.P3\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none") +
-coord_cartesian(ylim = c(200, 650)) 
+summary_plot_P2_StDev <- create_summary_plot(data = ZOO, measurevar = "Standard.Dev.P2")
+print(summary_plot_P2_StDev)
 
 ```
 
 ```{r}
-summary <- summarySE(combo_good, measurevar=c("Peak.Latency.P3"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=Peak.Latency.P3, fill=Group) ) + 
-geom_bar(stat="identity", color="black", fill="lightblue", position=position_dodge()) +
-geom_errorbar(aes(ymin = Peak.Latency.P3-se, ymax = Peak.Latency.P3+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="Peak.Latency.P3\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none") +
-coord_cartesian(ylim = c(200, 650)) 
-
+summary_plot_N2_StDev <- create_summary_plot(data = ZOO, measurevar = "Standard.Dev.N2")
+print(summary_plot_N2_StDev)
 ```
 
 ```{r}
-summary <- summarySE(combo, measurevar=c("Standard.Dev.P2"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=Standard.Dev.P2, fill=Group) ) + 
-geom_bar(stat="identity", color="black", position=position_dodge()) +
-geom_errorbar(aes(ymin = Standard.Dev.P2-se, ymax = Standard.Dev.P2+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="Standard.Dev.P2\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none") 
-
-```
-```{r}
-summary <- summarySE(combo, measurevar=c("Standard.Dev.N2"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=Standard.Dev.N2, fill=Group) ) + 
-geom_bar(stat="identity", color="black", position=position_dodge()) +
-geom_errorbar(aes(ymin = Standard.Dev.N2-se, ymax = Standard.Dev.N2+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="Standard.Dev.N2\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none") 
+summary_plot_P3_StDev <- create_summary_plot(data = ZOO, measurevar = "Standard.Dev.P3")
+print(summary_plot_P3_StDev)
 ```
 
 ```{r}
-summary <- summarySE(combo, measurevar=c("Standard.Dev.P3"), groupvars=c("Trial.Type","Group"))
-    
-ggplot(summary, aes(x=Trial.Type, y=Standard.Dev.P3, fill=Group) ) + 
-geom_bar(stat="identity", color="black", position=position_dodge()) +
-geom_errorbar(aes(ymin = Standard.Dev.P3-se, ymax = Standard.Dev.P3+se), width=0.2, position = position_dodge(.9)) +
-facet_wrap(~Group) + 
-theme_classic() + labs(y="Standard.Dev.P3\n", x = "\nCondition") +
-theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
-      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
-      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
-      legend.position = "none") 
+install.packages("knitr")
+install.packages("rmarkdown")
+rmarkdown::render("/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/ZooTask_06.06.23_clean.Rmd")
 ```
 
