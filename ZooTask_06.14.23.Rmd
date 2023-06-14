@@ -1,0 +1,484 @@
+---
+title: "ZooTask_06.14.23"
+output: html_document
+date: '2023-06-14'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+## Including Plots
+
+You can also embed plots, for example:
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+INSTALL NECESSARY PACKAGES:
+```{r}
+# install.packages("erp.easy")
+library(erp.easy)
+library(dplyr)
+library(Hmisc)
+```
+
+LOCATE FOLDERS:
+
+```{r}
+# Locate the folder for the EEG output files (.txt) for old and new nets, replace the file location below with the one in your local device:
+path_newnets <- "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/newnets/"
+path_oldnets <- "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/oldnets/"
+# Enter the number of participants in each group:
+subs_new <- 57
+subs_old <- 11
+```
+
+LOAD DATA:
+* Load the data from all subjects into a dataframe for each of the 4 conditions.
+* Convert all variables into factors so that the grand average function can work properly.
+* Do this separately for old nets and new nets since we will process them differently based on electrode locations (electrode numbers are different)
+* Make sure all files are 250m/s sampling rate - downsample beforehand if needed. Code would not run if a child has higher sampling rate. 
+
+```{r}
+# Load data into dataframes for each condition separately (the exported .txt files appear separately for each condition):
+neg_go <- load.data(path_newnets,"NegGo", subs_new, -100, 999) 
+neg_nogo <- load.data(path_newnets,"NegNoGo", subs_new, -100, 999)
+neut_go <- load.data(path_newnets,"NeutGo", subs_new, -100, 999)
+neut_nogo <- load.data(path_newnets,"NeutNoGo", subs_new, -100, 999)
+
+# Combine all conditions together into a single dataframe:
+combo_new <- rbind.data.frame(neg_go, neg_nogo, neut_go, neut_nogo) 
+combo_new <- as.data.frame(unclass(combo_new), stringsAsFactors=TRUE)
+
+# Repeat for old nets:
+neg_go_old <- load.data(path_oldnets,"NegGo", subs_old, -100, 999) 
+neg_nogo_old <- load.data(path_oldnets,"NegNoGo", subs_old, -100, 999)
+neut_go_old <- load.data(path_oldnets,"NeutGo", subs_old, -100, 999)
+neut_nogo_old <- load.data(path_oldnets,"NeutNoGo", subs_old, -100, 999)
+
+combo_old <- rbind.data.frame(neg_go_old, neg_nogo_old, neut_go_old, neut_nogo_old) 
+combo_old <- as.data.frame(unclass(combo_old),stringsAsFactors=TRUE)
+
+```
+
+SPECIFY THE ELECTRODE NUMBERS FOR P2, N2 and P3:
+```{r}
+# We are only interested in frontal P2 (positive) and N2 (negative)
+# Posterior P3 and Frontal P3
+
+p2n2_newnets <- c("V4","V5","V10","V11","V12","V16","V18","V19") 
+p2n2_oldnets <- c("V4","V5","V10","V11","V12","V16","V19", "V20")
+p3_newnets <- c("V54","V61","V62","V67","V72","V77","V78","V79") 
+p3_oldnets <- c("V54","V61","V62","V67","V68","V73","V78","V79","V80") 
+
+#Create average waveform plots for each subject in a single, multiplot window
+mosaic(combo_new, p2n2_newnets, cols = 3, rows = 2)
+mosaic(combo_new, p3_newnets, cols = 3, rows = 2)
+
+```
+
+CODE BELOW GETS ALL THE MEASURES (N2, P2, P3) FROM OLD AND NEW NET DATA, COMBINE THEM TOGETHER AND IT SAVES THE DATA INTO A FINAL COMBO SPREADSHEET:
+
+* The dependent measures we use are mean amplitude (microvolts) and latency (in ms) for statistical analysis. 
+* m.measures gives the mean amplitude for a specific window and its dt dev. along with its graph. 
+specify lgnd = "n" (no legend) if you do not want the legend 
+* p.measures calculates local or simple peak amplitude and latency for each condition in the data frame. Use latency only from p.measures
+* pol = The polarity of peaks to favor when multiple peaks are present. Entering "pos" will locate the most positive peak. Entering "neg" will locate the most negative peak. Entering "abs" will find the greatest deviation from 0, regardless of the polarity.  
+
+# CHECK THE WINDOW RANGE FOR EACH ERP COMPONENT AND ADJUST AS NEEDED!
+```{r}
+
+# Get the measures from the old NEW net:
+MeanAmp_P2_newnets <- (m.measures(combo_new, p2n2_newnets, window=c(150,300))) 
+MeanAmp_N2_newnets <- (m.measures(combo_new, p2n2_newnets, window=c(350,550))) 
+MeanAmp_P3_newnets <- (m.measures(combo_new, p3_newnets, window=c(450,750)))  
+
+Latency_P2_newnets <- (p.measures(combo_new, p2n2_newnets, window=c(150,300), pol="pos")) 
+Latency_N2_newnets <- (p.measures(combo_new, p2n2_newnets, window=c(350,550), pol="neg"))
+Latency_P3_newnets <- (p.measures(combo_new, p3_newnets, window=c(450,750), pol="pos"))
+
+# Combine all results together
+# You can use full_join or merge in the same way:
+
+total_new <- MeanAmp_P2_newnets %>%
+            full_join(MeanAmp_N2_newnets, by = c("Subject", "Trial Type"), suffix = c(".P2", ".N2")) %>%
+            full_join(MeanAmp_P3_newnets, by = c("Subject", "Trial Type"))  %>%
+            full_join(Latency_P2_newnets, by = c("Subject", "Trial Type"))  %>%
+            full_join(Latency_N2_newnets, by = c("Subject", "Trial Type"), suffix = c(".P2", ".N2")) %>%
+            full_join(Latency_P3_newnets, by = c("Subject", "Trial Type"))
+
+# rename the variables without any suffix here:
+# rename does not work properly unless you specify the package - some conflict:
+total_new <- total_new %>% dplyr::rename("Mean Amplitude.P3" = "Mean Amplitude",
+                                      "Standard Dev.P3" = "Standard Dev",
+                                      "Peak Latency.P3" = "Peak Latency",
+                                      "Peak Amplitude.P3" = "Peak Amplitude")
+
+# Get the measures from the old OLD net:
+MeanAmp_P2_oldnets <- (m.measures(combo_old, p2n2_oldnets, window=c(150,300))) 
+MeanAmp_N2_oldnets <- (m.measures(combo_old, p2n2_oldnets, window=c(350,550)))
+MeanAmp_P3_oldnets <- (m.measures(combo_old, p3_oldnets, window=c(450,750))) 
+
+Latency_P2_oldnets <- (p.measures(combo_old, p2n2_oldnets, window=c(150,300), pol="pos")) 
+Latency_N2_oldnets <- (p.measures(combo_old, p2n2_oldnets, window=c(350,550), pol="neg"))
+Latency_P3_oldnets <- (p.measures(combo_old, p3_oldnets, window=c(450,750), pol="pos"))
+
+# Combine all results together
+total_old <- MeanAmp_P2_oldnets %>%
+            full_join(MeanAmp_N2_oldnets, by = c("Subject", "Trial Type"), suffix = c(".P2", ".N2")) %>%
+            full_join(MeanAmp_P3_oldnets, by = c("Subject", "Trial Type"))  %>%
+            full_join(Latency_P2_oldnets, by = c("Subject", "Trial Type"))  %>%
+            full_join(Latency_N2_oldnets, by = c("Subject", "Trial Type"), suffix = c(".P2", ".N2")) %>%
+            full_join(Latency_P3_oldnets, by = c("Subject", "Trial Type"))
+
+
+# rename the variables without any suffix here:
+total_old <- total_old %>% dplyr::rename("Mean Amplitude.P3" = "Mean Amplitude",
+                            "Standard Dev.P3" = "Standard Dev",
+                            "Peak Latency.P3" = "Peak Latency",
+                            "Peak Amplitude.P3" = "Peak Amplitude")
+
+# Combine old and new net data together:
+combo <- full_join(total_new, total_old)
+
+# Making sure we are only adding new rows - participants
+nrow(total_new) + nrow(total_old) == nrow(combo)
+ncol(total_old) == ncol(total_new) 
+ncol(total_new) ==  ncol(combo)
+
+# Remove Grand Ave from data, order by subject name and reset the index:
+combo <- combo[!(combo$Subject=="Grand Avg"),]
+combo <- with(combo,  combo[order(Subject) , ])
+rownames(combo) <- NULL
+unique(combo[c("Subject")])
+
+# CREATE A NEW COLUMN by taking the difference between N2-P2
+combo$`N2P2avg` <- combo$`Mean Amplitude.N2` - combo$`Mean Amplitude.P2`
+combo$`N2P2peak` <- combo$`Peak Amplitude.N2` - combo$`Peak Amplitude.P2`
+
+# Write to a csv file:
+write.csv(combo, "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/combo.csv")
+head(combo)
+```
+
+MERGE WITH INTAKE INFO:
+* Load data exported from RedCap, named: Intake_Stuttering_Language_Varbls_for_Zoo_and_Reactivity
+* Feature engineer necessary variables and merge the above ERP dataset with TalkerGroup, Gender, Age info along with Stuttering and Language Scores
+
+```{r}
+# Load DataSet: 
+intake <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/CognitiveEmotionalLi-IntakeStutteringLang.csv')
+
+# Subject IDs include the visit number in the combo dataset if it is NOT the first time point. 
+# Do the same here: Combine visit number with subject and create a new Subject variable so that it matches the combo:
+intake <- intake  %>%
+  mutate(Subject = ifelse(visitnumber != 1, paste0(part_id_status, "T", visitnumber), part_id_status)) 
+
+# Calculate the month difference using BIRTHDATE and CVE date to make sure the autocalculator is correct:
+# Install and load the lubridate package
+# install.packages("lubridate")
+
+library(lubridate)
+
+# the %/% operator is used to perform the floor division of the interval by months(1), which represents one month.
+intake$month_diff <- interval(intake$date_birth, intake$cve_date) %/% months(1)
+print(intake$month_diff)
+print(round(intake$calculator_age_cve))
+# Not a big difference between the hand calculated and auto calculated field. Let's use "calculator_age_cve"
+
+# Create a new variable representing final sldper100words ("disfluency_sldper100words_final) by taking disfluency_sldper100words from CVD as primary, but in the case that this data is missing, take the disfluency scores from CVE:
+intake <- intake  %>%
+  mutate(disfluency_sldper100words_final = ifelse(!is.na(disfluency_sldper100words), disfluency_sldper100words, disfluency_sldper100words_cve)) 
+
+# Create a final talker group variable ("talkergroup_final) using disfluency_sldper100words_final and talker group based on parent report:
+# 1: CWS, 0:CWNS, 9:unidentified
+intake <- intake  %>%
+  mutate(talkergroup_final = ifelse((disfluency_sldper100words_final >= 3 | calculator_talkergroup_parent == 1), 1,
+                                          ifelse((disfluency_sldper100words_final < 3 & calculator_talkergroup_parent == 0), 0, 9)))  
+
+
+# ignoring the NA's:
+# intake <- intake  %>%                                           
+# mutate(talkergroup_overall_final = ifelse((!is.na(talkergroup_disfluency_final) & talkergroup_disfluency_final == 1) | 
+#                                          (!is.na(calculator_talkergroup_parent) & calculator_talkergroup_parent == 1), 1,
+#                                         ifelse((!is.na(talkergroup_disfluency_final) & talkergroup_disfluency_final == & 
+#                                               (!is.na(calculator_talkergroup_parent) & calculator_talkergroup_parent == 0), 0, 9)))
+
+
+# Take the relevant columns from intake dataset
+# You may update this to take more columns into the dataset:
+intake <-  subset(intake, select=c('Subject','calculator_age_cve','calculator_gender_cve',
+                                   'calculator_talkergroup_parent','tso_calculated', 'disfluency_sldper100words','ssi_total', 
+                                   'disfluency_sldper100words_final', 'talkergroup_final',
+                                   "gfta_standard", "ppvt_standard", "evt_standard",             
+                                   "teld_rec_standard","teld_exp_standard", "teld_spokenlang_standard",
+                                   'cve_comments','comments_tasks'))
+
+
+# Merge with the main dataset using SUBJECT
+FULL <- merge(combo, intake, by=c("Subject"))
+head(FULL)  
+
+```
+
+FIND THE UNDEFINED (9) TALKER GROUPS AND MANUALLY MARK THEM AS EITHER 1 or 0:
+```{r}
+
+# Check the subject numbers with missing stuttering assessments:
+rows_with_null <- FULL[is.na(FULL$disfluency_sldper100words) | is.na(FULL$ssi_total) | is.na(FULL$ssi_severity), ] 
+# | is.na(FULL_2$calculator_talkergroup_parent) makes no difference
+unique(rows_with_null$Subject)
+
+# Show the rows where talkergroup_final = 9 or NA :
+short_RT_rows <- subset(FULL, talkergroup_final == 9 |  is.na(talkergroup_final))
+short_RT_rows
+
+# MANUALLY LABEL THE TALKERGROUP FOR NA's:
+# LW102219T3 == 0 because there is a record of a disflunecy count of 0, although no parent report available. 
+# SA072518 == 0, there is no indication in RedCap that the child stutterss
+
+# Replace NA values in a specific column based on a condition:
+FULL$talkergroup_final <- ifelse(FULL$Subject == "LW102219T3" & is.na(FULL$talkergroup_final), 0, FULL$talkergroup_final)
+FULL$talkergroup_final <- ifelse(FULL$Subject == "SA072518" & is.na(FULL$talkergroup_final), 0, FULL$talkergroup_final)
+
+# Making sure no 9 or NA remained:
+any(FULL$talkergroup_final == 9 | is.na(FULL$talkergroup_final))
+```
+
+YOU CAN CREATE A NEW SUBSET WITH ONLY GOOD DATA HERE:
+```{r}
+# Create a new subset with ONLY good data, by removing those participants you identified as having bad data:
+combo_good <- dplyr::filter(combo, Subject!="AE050318", Subject!="AL090917", Subject!="ES031519", Subject!="LS100617", Subject!="LG100721", Subject!="MS102319", Subject!="PB021519", Subject!="RT032219")
+
+head(combo_good)
+
+```
+
+LOAD AND MERGE WITH BEHAVIORAL DATA:
+* for GO and NOGO conditions use ShowStim.RESP to compute the accuracy. 
+* ShowStim.RESP: 4 it means the child pushed the button (accurate for Go), NA means no response (accurate for NoGo). 
+
+```{r}
+# Load the file:
+accuracy <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/Merged_Zoo_05.18.23.csv')
+# Take only the relevant variables:
+accuracy <-  subset(accuracy, select=c('Name','VisitNumber','ShowStim.ACC','ShowStim.RESP','ShowStim.RT','StimTag'))
+
+# Check out the class types for each variable. 
+sapply(accuracy, class)
+# For ShowStim.RESP response 4 is a "character", not integer. 
+print(class(accuracy$ShowStim.RESP))
+
+# Convert character 4 for ShowStim.RESP to integer
+# accuracy$ShowStim.RESP <- as.integer(accuracy$ShowStim.RESP)
+
+# Create a new ACCURACY column based on Go or NoGo conditions.
+# ShowStim.RESP: 4 means the child pushed the button (accurate for Go), NA means no response (accurate for NoGo). 
+# 1 is accurate, 0 is inaccurate:
+accuracy <- accuracy %>%
+  filter((StimTag == 'negN' | StimTag == 'neuN') |
+         (StimTag == 'negG' | StimTag == 'neuG')) %>%
+  mutate(accuracy = case_when(
+    (StimTag == 'negN' | StimTag == 'neuN') & ShowStim.RESP == '4' ~ 0,
+    (StimTag == 'negN' | StimTag == 'neuN') & TRUE ~ 1,
+    (StimTag == 'negG' | StimTag == 'neuG') & ShowStim.RESP == '4' ~ 1,
+    (StimTag == 'negG' | StimTag == 'neuG') & TRUE ~ 0
+  ))
+
+####YOU MIGHT DECIDE TO REMOVE ALL TRIALS WITH RT SHORTER THAN 148MS FOR THE ACCURACY CALCULATION#####
+
+# Display the short RT rows and how many of them there are:
+short_RT_rows <- accuracy[(accuracy$ShowStim.RT < 148 & accuracy$ShowStim.RT > 1), ]
+head(short_RT_rows)
+print(nrow(short_RT_rows)) 
+describe(short_RT_rows$StimTag)
+# THERE ARE 587 ROWS WITH RT LOWER THAN 148ms but ALL of them are NOGO trials anyways, so they are incorrect anyways. 
+# NO NEED TO CHANGE THE ACCURACY MEASURE ABOVE because Low RT is relevant only for Go trials. 
+
+# Create a subset of whole data set by excluding the very short RT trials.
+# accuracy_filtered <- accuracy[!(accuracy$ShowStim.RT < 148 & accuracy$ShowStim.RT > 1), ]
+# discrepancies <- accuracy$accuracy != accuracy$accuracy_filtered
+# discrepancy_rows <- which(discrepancies)
+# print(discrepancy_rows)
+
+
+# create ACCURACY PERCENTAGE column
+accuracy_percent <- accuracy %>%
+  group_by(Name, VisitNumber, StimTag) %>%
+  dplyr::summarize(accuracy_percentage = mean(accuracy) * 100)
+
+# calculate REACTION TIME for GO only
+reaction_time <- accuracy %>%
+  filter(accuracy == 1 & (StimTag == 'negG' | StimTag == 'neuG')) %>%
+  group_by(Name, VisitNumber,StimTag) %>%
+  dplyr::summarize(reaction_time = mean(ShowStim.RT))
+  
+
+# COMBINE accuracy_percent and reaction_time
+eprime <- full_join(accuracy_percent, reaction_time, by=c("Name", "VisitNumber", "StimTag"))
+
+# Combine visit number with subject and create a new Subject variable for eprime so that it matches the FULL
+eprime <- eprime  %>% 
+  mutate(Subject = ifelse(VisitNumber != 1, paste0(Name, "T", VisitNumber), Name)) 
+
+# Rename the labels for StimTags on eprime data
+eprime <- eprime %>% 
+  mutate(StimTag = recode(StimTag, "negG" = "NegGo", "negN" = "NegNoGo", "neuG" = "NeutGo", "neuN" = "NeutNoGo"))
+
+# Drop name and Visitnumber from eprime
+# Ungroup the dataframe first
+eprime <- ungroup(eprime)
+eprime <- eprime %>%
+  dplyr::select(-Name, -VisitNumber) # eprime <- select(eprime, -Name, -VisitNumber)
+
+# Replace Trial Type in FULL with "StimTag" to be able to merge with eprime data
+FULL <- FULL %>%
+  dplyr::rename("StimTag" = "Trial Type")
+
+# COMBINE ALL!!
+ZOO <- merge(FULL, eprime, by=c("Subject", "StimTag"))
+head(ZOO)
+write.csv(ZOO, "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/ZOO.csv")
+
+```
+
+YOU CAN CREATE A NEW SUBSET WITH ONLY HIGHER BEHAVIROAL ACCURACY!
+
+```{r}
+# ZOO <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/ZOO.csv')
+
+ZOO_good <- subset(ZOO, accuracy_percentage > 75)
+filtered_rows <- ZOO[ZOO$accuracy_percentage < 75, ]
+
+nrow(ZOO)
+nrow(ZOO_good)
+
+summary(ZOO$accuracy_percentage)
+
+```
+
+LINE PLOTS - WRITE FUNCTION:
+* This function gives a summary bar graph by taking data and measurevar as input. 
+* Data: the data frame, measurevar: The target dependent variable we are interested in.
+
+```{r}
+
+library(Rmisc);
+library(ggplot2);
+
+
+create_summary_plot <- function(data, measurevar) {
+  # Converts the data object into a data frame, while ensuring that character variables are treated as factors in the data frame:
+  data <- as.data.frame(unclass(data), stringsAsFactors = TRUE)
+  # Get summary statistics for each StimTag and TalkerGroup:
+  summary <- summarySE(data, measurevar = measurevar, groupvars = c("StimTag", "talkergroup_final"))
+  
+  # Generate the summary plot using ggplot2:
+  # By using !!rlang::sym(measurevar), we convert the measurevar string into a symbol that can be evaluated in the context of the     # ggplot aesthetics. This allows the measurevar parameter to be dynamically incorporated into the plot.
+  # The gsub function searches for dots (\\.) and replaces them with spaces.
+  # This code would directly paste the var name: labs(y = paste0(measurevar, "\n"), x = "\nCondition") 
+  
+  plot <- ggplot(summary, aes(x = StimTag, y = !!rlang::sym(measurevar), fill = talkergroup_final)) +
+    geom_bar(stat = "identity", color = "black", position = position_dodge()) +
+    geom_errorbar(aes(ymin = !!rlang::sym(measurevar) - se, ymax = !!rlang::sym(measurevar) + se),
+                  width = 0.2, position = position_dodge(.9)) +
+    facet_wrap(~ talkergroup_final) +
+    theme_classic() +
+    labs(y = gsub("\\.", " ", measurevar), x = "\nCondition") + 
+    theme(axis.title.x = element_text(family = "Arial", color = "grey20", size = 12, angle = 0), 
+          axis.title.y = element_text(family = "Arial", color = "grey20", size = 12, angle = 90),
+          strip.text.x = element_text(family = "Arial", color = "grey20", size = 10, angle = 0),
+          legend.position = "none")
+  
+  # Return the generated plot
+  return(plot)
+}
+
+
+## EXTRA GGPLOT FEATURES:
+# scale_y_continuous(limits = c(-0.2, 0.8), breaks = c(-0.2, 0, 0.2, 0.4, 0.6, 0.8)) +
+# ggsave("/Users/aysuerdemir/Desktop/R workspace/Myplots/boxplot7_fromdescriptivedata.png", dpi=300, units="in", height=6, width=8)
+# theme <- 
+#    legend.title = element_text(family="Arial", color = "grey20", size = 18, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+#    legend.text = element_text(family="Arial", color = "grey20", size = 18, angle = 0, hjust = .5, vjust = .5, face = "plain"),
+#    legend.title.align = 0, legend.text.align = 0)
+
+```
+
+DRAW THE PLOTS USING THE FUNCTION ABOVE:
+```{r}
+summary_plot_P2 <- create_summary_plot(data = ZOO, measurevar = "Mean.Amplitude.P2")
+print(summary_plot_P2)
+```
+
+```{r}
+summary_plot_N2 <- create_summary_plot(data = ZOO, measurevar = "Mean.Amplitude.N2")
+print(summary_plot_N2)
+```
+
+```{r}
+summary_plot_N2P2avg <- create_summary_plot(data = ZOO, measurevar = "N2P2avg")
+print(summary_plot_N2P2avg)
+```
+
+```{r}
+summary_plot_N2P2peak <- create_summary_plot(data = ZOO, measurevar = "N2P2peak")
+print(summary_plot_N2P2peak)
+```
+
+```{r}
+summary_plot_P3 <- create_summary_plot(data = ZOO, measurevar = "Mean.Amplitude.P3")
+print(summary_plot_P3)
+```
+
+```{r}
+ZOO <- as.data.frame(unclass(ZOO), stringsAsFactors = TRUE)
+summary <- summarySE(ZOO, measurevar=c("Peak.Latency.N2"), groupvars=c("StimTag","talkergroup_final"))
+    
+ggplot(summary, aes(x=StimTag, y=Peak.Latency.N2, fill=talkergroup_final) ) + 
+geom_bar(stat="identity", color="black", position=position_dodge()) +
+geom_errorbar(aes(ymin = Peak.Latency.N2-se, ymax = Peak.Latency.N2+se), width=0.2, position = position_dodge(.9)) +
+facet_wrap(~talkergroup_final) + 
+theme_classic() + labs(y="Peak.Latency.N2\n", x = "\nCondition") +
+theme(axis.title.x = element_text(family="Arial", color = "grey20", size = 12, angle = 0),
+      axis.title.y = element_text(family="Arial", color = "grey20", size = 12, angle = 90),
+      strip.text.x = element_text(family="Arial", color = "grey20", size = 10, angle = 0),
+      legend.position = "none") +
+coord_cartesian(ylim = c(300, 500)) 
+
+```
+
+```{r}
+summary_plot_P2_Latency <- create_summary_plot(data = ZOO, measurevar = "Peak.Latency.P2")
+print(summary_plot_P2_Latency)
+```
+
+```{r}
+summary_plot_P3_Latency <- create_summary_plot(data = ZOO, measurevar = "Peak.Latency.P3")
+print(summary_plot_P3_Latency)
+# coord_cartesian(ylim = c(200, 650)) 
+```
+
+```{r}
+summary_plot_P2_StDev <- create_summary_plot(data = ZOO, measurevar = "Standard.Dev.P2")
+print(summary_plot_P2_StDev)
+
+```
+
+```{r}
+summary_plot_N2_StDev <- create_summary_plot(data = ZOO, measurevar = "Standard.Dev.N2")
+print(summary_plot_N2_StDev)
+```
+
+```{r}
+summary_plot_P3_StDev <- create_summary_plot(data = ZOO, measurevar = "Standard.Dev.P3")
+print(summary_plot_P3_StDev)
+```
+
