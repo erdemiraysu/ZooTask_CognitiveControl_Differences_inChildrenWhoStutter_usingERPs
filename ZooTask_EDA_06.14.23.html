@@ -364,7 +364,114 @@ on using R Markdown see <a href="http://rmarkdown.rstudio.com" class="uri">http:
 generated that includes both content as well as the output of any
 embedded R code chunks within the document. You can embed an R code
 chunk like this:</p>
-<pre class="r"><code>ZOO &lt;- read.csv(file = &#39;/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/ZOO.csv&#39;)</code></pre>
+</div>
+<div id="install-necessary-packages" class="section level1">
+<h1>INSTALL NECESSARY PACKAGES:</h1>
+<pre class="r"><code># install.packages(&quot;Rmisc&quot;)
+library(dplyr)</code></pre>
+<pre><code>## Warning: package &#39;dplyr&#39; was built under R version 4.0.5</code></pre>
+<pre><code>## 
+## Attaching package: &#39;dplyr&#39;</code></pre>
+<pre><code>## The following objects are masked from &#39;package:stats&#39;:
+## 
+##     filter, lag</code></pre>
+<pre><code>## The following objects are masked from &#39;package:base&#39;:
+## 
+##     intersect, setdiff, setequal, union</code></pre>
+<pre class="r"><code>library(Rmisc);</code></pre>
+<pre><code>## Loading required package: lattice</code></pre>
+<pre><code>## Loading required package: plyr</code></pre>
+<pre><code>## ------------------------------------------------------------------------------</code></pre>
+<pre><code>## You have loaded plyr after dplyr - this is likely to cause problems.
+## If you need functions from both plyr and dplyr, please load plyr first, then dplyr:
+## library(plyr); library(dplyr)</code></pre>
+<pre><code>## ------------------------------------------------------------------------------</code></pre>
+<pre><code>## 
+## Attaching package: &#39;plyr&#39;</code></pre>
+<pre><code>## The following objects are masked from &#39;package:dplyr&#39;:
+## 
+##     arrange, count, desc, failwith, id, mutate, rename, summarise,
+##     summarize</code></pre>
+<pre class="r"><code>library(ggplot2);</code></pre>
+</div>
+<div id="read-the-full-dataset" class="section level1">
+<h1>READ THE FULL DATASET:</h1>
+<pre class="r"><code>ZOO &lt;- read.csv(file = &#39;/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/ZOO.csv&#39;)
+# Remove the added X variable after reading it back into R:
+ZOO &lt;- ZOO %&gt;%
+  dplyr::select(-X)
+# Display the first 6 rows of te final dataset:
+head(ZOO)</code></pre>
+<pre><code>##    Subject  StimTag Standard.Dev.P2 Mean.Amplitude.P2 Standard.Dev.N2
+## 1 AE050318    NegGo        3.021852         -6.470334        3.907745
+## 2 AE050318  NegNoGo        5.962168          3.531623        2.249580
+## 3 AE050318   NeutGo        2.577527        -10.326151        3.458130
+## 4 AE050318 NeutNoGo        5.419626        -10.376971        2.866578
+## 5 AH101121    NegGo        2.182505         -7.668577        1.576681
+## 6 AH101121  NegNoGo        3.187342         -4.029610        1.060874
+##   Mean.Amplitude.N2 Standard.Dev.P3 Mean.Amplitude.P3 Peak.Latency.P2
+## 1        -10.871784        1.377677          3.505749             220
+## 2          2.023796        2.252998          3.432536             256
+## 3        -15.687000        1.537678          4.367052             228
+## 4         -7.857202        2.118532          7.358546             204
+## 5        -24.930473        4.063984         18.547604             232
+## 6        -24.144933        4.750914         14.173249             244
+##   Peak.Amplitude.P2 Peak.Latency.N2 Peak.Amplitude.N2 Peak.Latency.P3
+## 1        -2.7612018             536         -5.187617             648
+## 2        11.4069294             452         -2.268911             596
+## 3        -7.3050607             376        -20.651664             588
+## 4        -4.5040871             452         -7.270952             720
+## 5        -5.8547045             492        -26.713190             528
+## 6        -0.5727539             476        -25.672664             508
+##   Peak.Amplitude.P3    N2P2avg   N2P2peak calculator_age_cve
+## 1          5.088120  -4.401450  -2.426415               38.1
+## 2          6.870649  -1.507826 -13.675841               38.1
+## 3          7.176728  -5.360848 -13.346603               38.1
+## 4         10.265959   2.519769  -2.766865               38.1
+## 5         23.899982 -17.261896 -20.858486               70.5
+## 6         18.808306 -20.115323 -25.099910               70.5
+##   calculator_gender_cve calculator_talkergroup_parent tso_calculated
+## 1                     0                             1            1.9
+## 2                     0                             1            1.9
+## 3                     0                             1            1.9
+## 4                     0                             1            1.9
+## 5                     1                             0             NA
+## 6                     1                             0             NA
+##   disfluency_sldper100words ssi_total disfluency_sldper100words_final
+## 1                        12        23                              12
+## 2                        12        23                              12
+## 3                        12        23                              12
+## 4                        12        23                              12
+## 5                         0         6                               0
+## 6                         0         6                               0
+##   talkergroup_final gfta_standard ppvt_standard evt_standard teld_rec_standard
+## 1                 1           121           126          123               146
+## 2                 1           121           126          123               146
+## 3                 1           121           126          123               146
+## 4                 1           121           126          123               146
+## 5                 0           104           111          111               110
+## 6                 0           104           111          111               110
+##   teld_exp_standard teld_spokenlang_standard cve_comments
+## 1               135                      149             
+## 2               135                      149             
+## 3               135                      149             
+## 4               135                      149             
+## 5               115                      115             
+## 6               115                      115             
+##                                                        comments_tasks
+## 1                                                                    
+## 2                                                                    
+## 3                                                                    
+## 4                                                                    
+## 5 Good data, attentive child, but sleepy during the Reactivity task. 
+## 6 Good data, attentive child, but sleepy during the Reactivity task. 
+##   accuracy_percentage reaction_time
+## 1            84.16667      706.0297
+## 2            57.50000            NA
+## 3            90.83333      796.2385
+## 4            72.50000            NA
+## 5            99.16667      643.1176
+## 6            87.50000            NA</code></pre>
 </div>
 <div id="line-plots---function-to-automate-the-process" class="section level1">
 <h1>LINE PLOTS - FUNCTION TO AUTOMATE THE PROCESS:</h1>
@@ -374,10 +481,8 @@ measurevar as input.</li>
 <li>Data: the data frame, measurevar: The target dependent variable we
 are interested in.</li>
 </ul>
-<pre class="r"><code>library(Rmisc);</code></pre>
-<pre><code>## Loading required package: lattice</code></pre>
-<pre><code>## Loading required package: plyr</code></pre>
-<pre class="r"><code>library(ggplot2);
+<pre class="r"><code>library(Rmisc);
+library(ggplot2);
 
 create_summary_plot &lt;- function(data, measurevar) {
   # Converts the data object into a data frame, while ensuring that character variables are treated as factors in the data frame:
