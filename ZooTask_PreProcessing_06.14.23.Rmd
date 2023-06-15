@@ -56,15 +56,17 @@ neut_nogo_old <- load.data(path_oldnets,"NeutNoGo", subs_old, -100, 999)
 combo_old <- rbind.data.frame(neg_go_old, neg_nogo_old, neut_go_old, neut_nogo_old) 
 combo_old <- as.data.frame(unclass(combo_old),stringsAsFactors=TRUE)
 
+head(combo_old)
 ```
 
 # SPECIFY THE ELECTRODE NUMBERS FOR P2, N2 and P3:
+
 ```{r}
 # We are only interested in frontal P2 (positive) and N2 (negative)
 # Posterior P3 and Frontal P3
 
-p2n2_newnets <- c("V4","V5","V10","V11","V12","V16","V18","V19") 
-p2n2_oldnets <- c("V4","V5","V10","V11","V12","V16","V19", "V20")
+p2n2_newnets <- c("V4","V5","V10","V11","V12","V16","V18","V19") #("V4", "V6","V11","V13", "V19", "V112”) ? ("V5", "V6", "V7", "V11", "V12", "V13", "V107", "V113", "V119")?
+p2n2_oldnets <- c("V4","V5","V10","V11","V12","V16","V19", "V20") #c("V5", "V6","V10", "V11", "V12", "V16", "V19", "V20") ?
 p3_newnets <- c("V54","V61","V62","V67","V72","V77","V78","V79") 
 p3_oldnets <- c("V54","V61","V62","V67","V68","V73","V78","V79","V80") 
 
@@ -73,6 +75,16 @@ mosaic(combo_new, p2n2_newnets, cols = 3, rows = 2)
 mosaic(combo_new, p3_newnets, cols = 3, rows = 2)
 
 ```
+```{r}
+# grand average plots the grand average waveform for each condition present in the dataframe you provide.A color-coded and labeled legend is generated with the plot for ease of identification of each condition.
+grandaverage(combo_new, p2n2_newnets)
+# butterfly plots all individual waveforms for the condition specified by the stim argument(i.e.,a butterfly plot).The grandaverage waveform is also plotted,using a red line.
+butterfly(combo_new,p2n2_newnets, stim=1)
+```
+
+
+
+
 # CODE BELOW GETS ALL THE MEASURES (N2, P2, P3) FROM OLD AND NEW NET DATA, COMBINE THEM TOGETHER AND IT SAVES THE DATA INTO A FINAL COMBO SPREADSHEET:
 # CHECK THE WINDOW RANGE FOR EACH ERP COMPONENT AND ADJUST AS NEEDED!
 * The dependent measures we use are mean amplitude (microvolts) and latency (in ms) for statistical analysis. 
@@ -143,7 +155,7 @@ ncol(total_new) ==  ncol(combo)
 # Remove Grand Ave from data, order by subject name and reset the index:
 combo <- combo[!(combo$Subject=="Grand Avg"),]
 combo <- with(combo,  combo[order(Subject) , ])
-rownames(combo) <- NULL
+rownames(combo) <- NULL # Reset index
 unique(combo[c("Subject")])
 
 # CREATE A NEW COLUMN by taking the difference between N2-P2
@@ -226,8 +238,8 @@ short_RT_rows
 # SA072518 == 0, there is no indication in RedCap that the child stutterss
 
 # Replace NA values in a specific column based on a condition:
-FULL$talkergroup_final <- ifelse(FULL$Subject == "LW102219T3" & is.na(FULL$talkergroup_final), 0, FULL$talkergroup_final)
-FULL$talkergroup_final <- ifelse(FULL$Subject == "SA072518" & is.na(FULL$talkergroup_final), 0, FULL$talkergroup_final)
+FULL$talkergroup_final <- ifelse(FULL$Subject == "LW102219T3", 0, FULL$talkergroup_final)
+FULL$talkergroup_final <- ifelse(FULL$Subject == "SA072518", 0, FULL$talkergroup_final)
 
 # Making sure no 9 or NA remained:
 any(FULL$talkergroup_final == 9 | is.na(FULL$talkergroup_final))
@@ -244,7 +256,7 @@ head(combo_good)
 * ShowStim.RESP: 4 it means the child pushed the button (accurate for Go), NA means no response (accurate for NoGo). 
 ```{r}
 # Load the file:
-accuracy <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/Merged_Zoo_05.18.23.csv')
+accuracy <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/Merged_Zoo_06.15.23.csv')
 # Take only the relevant variables:
 accuracy <-  subset(accuracy, select=c('Name','VisitNumber','ShowStim.ACC','ShowStim.RESP','ShowStim.RT','StimTag'))
 
@@ -326,7 +338,6 @@ write.csv(ZOO, "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mi
 
 ```
 
-# YOU CAN CREATE A NEW SUBSET WITH ONLY HIGHER BEHAVIROAL ACCURACY!
 ```{r}
 # ZOO <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/ZOO.csv')
 
