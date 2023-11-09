@@ -15,4 +15,5 @@ to see the file with embedded output see the link: **https://erdemiraysu.github.
 - **Survey data** from RedCap transformed into a dataframe with demographic, stuttering and language related measures using data wrangling.
 - Data from these different resources complied together into a single daatset.
 
-#### Data Analysis: 
+#### Exploratory Data Analysis and Modeling: 
+to see the file with embedded output see the link:  **https://erdemiraysu.github.io/ZooTask/ZOOTask_EDA_Modeling_11.07.23**
