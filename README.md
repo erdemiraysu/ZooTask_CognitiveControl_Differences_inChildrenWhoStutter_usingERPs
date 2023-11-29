@@ -19,4 +19,4 @@ to see the file with embedded output see the link: **https://erdemiraysu.github.
 to see the file with embedded output see the link:  **https://erdemiraysu.github.io/ZooTask/ZOOTask_EDA_Modeling_11.07.23**
 
 #### Preliminary Results on a Poster:
-**https://github.com/erdemiraysu/ZooTask/blob/main/ErdemirAysu_ASHA2023_10.31.23.pdf**
+**[https://github.com/erdemiraysu/ZooTask/blob/main/Erdemir_A_ZooTaskPoster_2023_11.pdf](https://github.com/erdemiraysu/ZooTask/blob/main/Erdemir_A_ZooTaskPoster_2023_11.pdf)**
