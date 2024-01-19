@@ -16,7 +16,7 @@ to see the file with embedded output see the link: **https://erdemiraysu.github.
 - Data from these different resources complied together into a single daatset.
 
 #### Exploratory Data Analysis and Modeling (In progress):
-to see the file with embedded output see the link:  **https://erdemiraysu.github.io/ZooTask/ZOOTask_EDA_Modeling_11.07.23**
+to see the file with embedded output see the link:  **https://erdemiraysu.github.io/ZooTask/ZOOTask_EDA_Modeling_01.16.24**
 
 #### Preliminary Results on a Poster:
 **[https://github.com/erdemiraysu/ZooTask/blob/main/Erdemir_A_ZooTaskPoster_2023_11.pdf](https://github.com/erdemiraysu/ZooTask/blob/main/Erdemir_A_ZooTaskPoster_2023_11.pdf)**
