@@ -9,7 +9,7 @@ Exploring the Cognitive Control in Young Children who Stutter using Electrophysi
 The Repository includes R scripts for
 
 #### Preprocessing: 
-to see the file with embedded output see the link: **https://erdemiraysu.github.io/ZooTask_CognitiveControl_Differences_inChildrenWhoStutter_usingERPs/ZooTask_PreProcessing_11.07.23.html**
+to see the file with embedded output see the link: **https://erdemiraysu.github.io/ZooTask_CognitiveControl_Differences_inChildrenWhoStutter_usingERPs/ZooTask_PreProcessing_01.16.24.html**
 - **EEG data** from NetStation transformed into a dataframe with individual ERP components using erp.easy package. ERP data was compiled, re-organized, and re-structured with feature engineering. 
 - **Behavioral data** from e-prime transformed into a dataframe with individual behavioral measures using data wrangling and extensive feature engineering.
 - **Survey data** from RedCap transformed into a dataframe with demographic, stuttering and language related measures using data wrangling.
