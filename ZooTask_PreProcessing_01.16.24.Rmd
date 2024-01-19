@@ -1,0 +1,1126 @@
+## R Markdown
+
+---
+title: "ZooTask_PreProcessing_12.05.23"
+output: html_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document
+
+```{r setup, include=FALSE}
+# Knitting a document simply means taking all the text and code and creating a nicely formatted document in either HTML, PDF, or Word 
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# INSTALL NECESSARY PACKAGES:
+```{r}
+# install.packages("erp.easy")
+library(erp.easy)
+library(dplyr)
+library(Hmisc)
+library(ggplot2, quietly = TRUE, warn.conflicts = FALSE)
+library(stringr)
+library(tidyr)
+library(reshape2)
+```
+
+# LOCATE FOLDERS:
+
+```{r}
+# Locate the folder for the EEG output files (.txt) for old and new nets, replace the file location below with the one in your local device:
+path_newnets <- "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/newnets/"
+path_oldnets <- "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/oldnets/"
+# Enter the number of participants in each group:
+subs_new <- 70
+subs_old <- 12
+```
+
+# LOAD DATA:
+* Load the data from all subjects into a dataframe for each of the 4 conditions.
+* Convert all variables into factors so that the grand average function can work properly.
+* Do this separately for old nets and new nets since we will process them differently based on electrode locations (electrode numbers are different)
+* Make sure all files are 250m/s sampling rate - downsample beforehand if needed. Code would not run if a child has higher sampling rate. 
+
+```{r}
+
+# Load data into dataframes for each condition separately (the exported .txt files appear separately for each condition):
+neg_go <- load.data(path_newnets,"NegGo", subs_new, -100, 999) 
+neg_nogo <- load.data(path_newnets,"NegNoGo", subs_new, -100, 999)
+neut_go <- load.data(path_newnets,"NeutGo", subs_new, -100, 999)
+neut_nogo <- load.data(path_newnets,"NeutNoGo", subs_new, -100, 999)
+
+# Combine all conditions together into a single dataframe:
+combo_new <- rbind.data.frame(neg_go, neg_nogo, neut_go, neut_nogo) 
+combo_new <- as.data.frame(unclass(combo_new), stringsAsFactors=TRUE)
+
+# Repeat for old nets:
+neg_go_old <- load.data(path_oldnets,"NegGo", subs_old, -100, 999) 
+neg_nogo_old <- load.data(path_oldnets,"NegNoGo", subs_old, -100, 999)
+neut_go_old <- load.data(path_oldnets,"NeutGo", subs_old, -100, 999)
+neut_nogo_old <- load.data(path_oldnets,"NeutNoGo", subs_old, -100, 999)
+
+combo_old <- rbind.data.frame(neg_go_old, neg_nogo_old, neut_go_old, neut_nogo_old) 
+combo_old <- as.data.frame(unclass(combo_old),stringsAsFactors=TRUE)
+
+head(combo_old)
+
+```
+
+# SPECIFY THE ELECTRODE NUMBERS FOR P2, N2 and P3:
+
+FCz = frontrocentral - midline
+FC4 = frontrocentral - right
+FC3 = frontrocentral - left
+
+Pz = parietal - midline
+P4 = parietal - right
+P3 = parietal - left
+
+```{r}
+
+# new nets: 
+FCz_newnets <- c("V18", "V16", "V10", "V19", "V11", "V4", "V12", "V5", "V6")
+FC4_newnets <- c("V3","V123","V124", "V117", "V118") 
+FC3_newnets <- c("V23","V27","V24",  "V28", "V20")
+
+Pz_newnets <- c("V54","V79","V61", "V62","V78", "V67", "V72", "V77")
+P4_newnets <- c("V85", "V86", "V91" , "V92" ,"V97", "V98")
+P3_newnets <- c("V51", "V52","V53", "V59", "V60", "V47")
+
+# repeat for old nets
+FCz_oldnets <- c("V19","V16", "V10", "V20","V11", "V4","V12","V5","V6")
+FC4_oldnets <- c("V3","V123","V119", "V123","V118")
+FC3_oldnets <- c("V24","V25","V21", "V28","V29")
+
+Pz_oldnets <- c( "V54","V62","V80", "V61","V68","V79", "V67", "V73","V78")
+P4_oldnets <- c("V87","V99", "V86", "V93", "V98", "V92")
+P3_oldnets <- c("V53","V48", "V52", "V60", "V51", "V59") 
+
+```
+
+# CHECK OUT INDIVIDUAL WAVEFORMS:
+# USING MOSAIC YOU CAN CREATE AN AVERAGE WAVEFORM FOR EACH PARTICIPANT IN EACH GROUP & NET LOCATION:
+
+```{r}
+#Create average waveform plots for each subject in a single, multiplot window
+mosaic(combo_new, FCz_newnets, cols = 3, rows = 2)
+mosaic(combo_new, Pz_newnets, cols = 3, rows = 2)
+
+mosaic(combo_old, FCz_oldnets, cols = 3, rows = 2)
+mosaic(combo_old, Pz_oldnets, cols = 3, rows = 2)
+
+```
+
+# CHECK OUT GRAND AVERAGES USING GRANDAVERAGE() 
+
+```{r}
+# grand average plots the grand average waveform for each condition present in the dataframe you provide.
+#`invisible()` function to hide the data output.
+invisible(grandaverage(combo_new, FCz_newnets))
+invisible(grandaverage(combo_new, Pz_newnets))
+
+# butterfly plots all individual waveforms for the condition specified by the stim argument(i.e.,a butterfly plot).
+# The grandaverage waveform is also plotted,using a red line.
+butterfly(combo_new,FCz_newnets, stim=1)
+```
+
+# CODE BELOW GETS ALL THE MEASURES (N2, P2, P3) FROM OLD AND NEW NET DATA, COMBINE THEM TOGETHER AND IT SAVES THE DATA INTO A FINAL COMBO SPREADSHEET:
+# CHECK THE WINDOW RANGE FOR EACH ERP COMPONENT AND ADJUST AS NEEDED!
+
+* The dependent measures we use are mean amplitude (microvolts) and latency (in ms) for statistical analysis. 
+* m.measures gives the mean amplitude for a specific window and its dt dev. along with its graph. 
+specify lgnd = "n" (no legend) if you do not want the legend 
+* p.measures calculates local or simple peak amplitude and latency for each condition in the data frame. Use latency only from p.measures
+* pol = The polarity of peaks to favor when multiple peaks are present. Entering "pos" will locate the most positive peak. Entering "neg" will locate the most negative peak. Entering "abs" will find the greatest deviation from 0, regardless of the polarity.  
+
+# P2 between 180–280 ms after stimulus onset at frontal, frontocentral and central electrode sites.
+# N2 between 320,520 ms after stimulus onset at frontal, frontocentral and central electrode sites.
+# P3 between 450-750 ms after stimulus onset at parietal electrode sites.
+```{r}
+
+# Get the mean Amplitude measures from the NEW net:
+MeanAmp_P2_FCz_newnets <- (m.measures(combo_new, FCz_newnets, window=c(180,280)))
+MeanAmp_P2_FC4_newnets <- (m.measures(combo_new, FC4_newnets, window=c(180,280)))
+MeanAmp_P2_FC3_newnets <- (m.measures(combo_new, FC3_newnets, window=c(180,280))) 
+
+MeanAmp_N2_FCz_newnets <- (m.measures(combo_new, FCz_newnets, window=c(320,520)))  
+MeanAmp_N2_FC4_newnets <- (m.measures(combo_new, FC4_newnets, window=c(320,520)))
+MeanAmp_N2_FC3_newnets<- (m.measures(combo_new, FC3_newnets, window=c(320,520)))  
+
+MeanAmp_P3_Pz_newnets <- (m.measures(combo_new, Pz_newnets, window=c(450,750)))  
+MeanAmp_P3_P4_newnets <- (m.measures(combo_new, P4_newnets, window=c(450,750)))  
+MeanAmp_P3_P3_newnets <- (m.measures(combo_new, P3_newnets, window=c(450,750)))  
+
+# We need to combine these but each one of these datasets use the same variable name - Mean Amplitude. 
+# Below is a function that will allow us to rename the variables in multiple datasets in a similar way using different names:
+
+rename_datasets_amplitude <- function(dataset_list, new_col_names){
+for (i in 1:length(dataset_list)){
+assign(dataset_list[i], rename(get(dataset_list[i]),
+!!new_col_names[i] := "Mean Amplitude"), envir = .GlobalEnv)
+}
+}
+
+datasets <- c("MeanAmp_P2_FCz_newnets", "MeanAmp_P2_FC4_newnets", "MeanAmp_P2_FC3_newnets",
+              "MeanAmp_N2_FCz_newnets", "MeanAmp_N2_FC4_newnets", "MeanAmp_N2_FC3_newnets",
+              "MeanAmp_P3_Pz_newnets", "MeanAmp_P3_P4_newnets", "MeanAmp_P3_P3_newnets")
+
+new_column_names <- c("MeanAmp_P2_FCz", "MeanAmp_P2_FC4", "MeanAmp_P2_FC3",
+                      "MeanAmp_N2_FCz", "MeanAmp_N2_FC4", "MeanAmp_N2_FC3",
+                      "MeanAmp_P3_Pz", "MeanAmp_P3_P4", "MeanAmp_P3_P3")
+
+rename_datasets_amplitude(datasets, new_column_names)
+
+
+#  load multiple datasets into the workspace     
+datasets_list <- mget(datasets)
+
+# Using the `Reduce()` function to merge multiple data frames stored in `datasets_list` into a single data frame called `df_merge1`. 
+# It does this by merging each data frame in the list with the others, based on the columns "Subject" and "Trial Type".
+
+merge_datasets_amplitude <- function(datasets_list) {
+Reduce(function(x, y) {
+x <- x[, !(names(x) %in% "Standard Dev")] # ignore Standard Dev column from the first dataframe, do not merge it
+y <- y[, !(names(y) %in% "Standard Dev")] # ignore Standard Dev column from the next dataframe, do not merge it
+merge(x, y, by=c("Subject", "Trial Type"))
+}, datasets_list)
+}
+
+# Run the function
+df_merge1 <- merge_datasets_amplitude(datasets_list) # use the function to merge the new data frames
+
+
+
+
+# Get the Latency measures from the NEW net:
+Latency_P2_FCz_newnets <- (p.measures(combo_new, FCz_newnets, window=c(180,280), pol="pos"))
+Latency_P2_FC4_newnets <- (p.measures(combo_new, FC4_newnets, window=c(180,280), pol="pos"))
+Latency_P2_FC3_newnets <- (p.measures(combo_new, FC3_newnets, window=c(180,280), pol="pos"))
+
+Latency_N2_FCz_newnets <- (p.measures(combo_new, FCz_newnets, window=c(320,520), pol="neg"))  
+Latency_N2_FC4_newnets <- (p.measures(combo_new, FC4_newnets, window=c(320,520), pol="neg"))  
+Latency_N2_FC3_newnets <- (p.measures(combo_new, FC3_newnets, window=c(320,520), pol="neg")) 
+
+Latency_P3_Pz_newnets <- (p.measures(combo_new, Pz_newnets, window=c(450,750), pol="pos"))
+Latency_P3_P4_newnets <- (p.measures(combo_new, P4_newnets, window=c(450,750), pol="pos"))
+Latency_P3_P3_newnets <- (p.measures(combo_new, P3_newnets, window=c(450,750), pol="pos"))
+
+
+# Function `rename_datasets()` that renames the columns "Peak Latency" and "Peak Amplitude" in each data frame from a list of data frames (`dataset_list`)
+rename_datasets_latency <- function(dataset_list, new_col_name1, new_col_name2){
+for (i in 1:length(dataset_list)){
+temp_data <- get(dataset_list[i])
+names(temp_data)[names(temp_data) == "Peak Latency"] <- new_col_name1[i]
+names(temp_data)[names(temp_data) == "Peak Amplitude"] <- new_col_name2[i]
+assign(dataset_list[i], temp_data, envir = .GlobalEnv)
+}
+}
+
+datasets <- c("Latency_P2_FCz_newnets", "Latency_P2_FC4_newnets", "Latency_P2_FC3_newnets",
+              "Latency_N2_FCz_newnets", "Latency_N2_FC4_newnets", "Latency_N2_FC3_newnets",
+              "Latency_P3_Pz_newnets", "Latency_P3_P4_newnets", "Latency_P3_P3_newnets")
+
+new_column_names1 <- c("Latency_P2_FCz", "Latency_P2_FC4", "Latency_P2_FC3",
+                      "Latency_N2_FCz", "Latency_N2_FC4", "Latency_N2_FC3",
+                      "Latency_P3_Pz", "Latency_P3_P4", "Latency_P3_P3")
+
+new_column_names2 <- c("PeakAmp_P2_FCz", "PeakAmp_P2_FC4", "PeakAmp_P2_FC3",
+                      "PeakAmp_N2_FCz", "PeakAmp_N2_FC4", "PeakAmp_N2_FC3",
+                      "PeakAmp_P3_Pz", "PeakAmp_P3_P4", "PeakAmp_P3_P3")
+
+rename_datasets_latency(datasets, new_column_names1, new_column_names2)
+
+#  load multiple datasets into the workspace     
+datasets_list <- mget(datasets)
+
+
+merge_datasets_latency <- function(datasets_list) {
+Reduce(function(x, y) {
+merge(x, y, by=c("Subject", "Trial Type"))
+}, datasets_list)
+}
+
+# Run the function
+df_merge2 <- merge_datasets_latency(datasets_list) # use the function to merge the new data frames
+
+# Combine the 2 dataframes
+ERP_newnets <- full_join(df_merge1, df_merge2, by = c("Subject", "Trial Type"))
+
+head(ERP_newnets)
+# remove standard dev column:
+# ERP_newnets <- ERP_newnets %>% select(-`Standard Dev`)
+```
+
+# REPEAT FOR OLD NETS!
+```{r}
+
+MeanAmp_P2_FCz_oldnets <- (m.measures(combo_old, FCz_oldnets, window=c(180,280)))
+MeanAmp_P2_FC4_oldnets <- (m.measures(combo_old, FC4_oldnets, window=c(180,280)))
+MeanAmp_P2_FC3_oldnets <- (m.measures(combo_old, FC3_oldnets, window=c(180,280)))
+
+MeanAmp_N2_FCz_oldnets <- (m.measures(combo_old, FCz_oldnets, window=c(320,520)))  
+MeanAmp_N2_FC4_oldnets <- (m.measures(combo_old, FC4_oldnets, window=c(320,520)))  
+MeanAmp_N2_FC3_oldnets <- (m.measures(combo_old, FC3_oldnets, window=c(320,520)))  
+
+MeanAmp_P3_Pz_oldnets <- (m.measures(combo_old, Pz_oldnets, window=c(450,750)))  
+MeanAmp_P3_P4_oldnets <- (m.measures(combo_old, P4_oldnets, window=c(450,750)))  
+MeanAmp_P3_P3_oldnets <- (m.measures(combo_old, P3_oldnets, window=c(450,750)))  
+
+datasets <- c("MeanAmp_P2_FCz_oldnets", "MeanAmp_P2_FC4_oldnets", "MeanAmp_P2_FC3_oldnets",
+              "MeanAmp_N2_FCz_oldnets", "MeanAmp_N2_FC4_oldnets", "MeanAmp_N2_FC3_oldnets",
+              "MeanAmp_P3_Pz_oldnets", "MeanAmp_P3_P4_oldnets", "MeanAmp_P3_P3_oldnets")
+
+new_column_names <- c("MeanAmp_P2_FCz", "MeanAmp_P2_FC4", "MeanAmp_P2_FC3",
+                      "MeanAmp_N2_FCz", "MeanAmp_N2_FC4", "MeanAmp_N2_FC3",
+                      "MeanAmp_P3_Pz", "MeanAmp_P3_P4", "MeanAmp_P3_P3")
+
+rename_datasets_amplitude(datasets, new_column_names)
+                
+datasets_list <- mget(datasets)
+
+df_merge1_old <- merge_datasets_amplitude(datasets_list) # use the function to merge the new data frames
+
+
+
+Latency_P2_FCz_oldnets <- (p.measures(combo_old, FCz_oldnets, window=c(180,280), pol="pos"))
+Latency_P2_FC4_oldnets <- (p.measures(combo_old, FC4_oldnets, window=c(180,280), pol="pos"))
+Latency_P2_FC3_oldnets <- (p.measures(combo_old, FC3_oldnets, window=c(180,280), pol="pos"))
+
+Latency_N2_FCz_oldnets <- (p.measures(combo_old, FCz_oldnets, window=c(320,520), pol="neg"))  
+Latency_N2_FC4_oldnets <- (p.measures(combo_old, FC4_oldnets, window=c(320,520), pol="neg"))  
+Latency_N2_FC3_oldnets <- (p.measures(combo_old, FC3_oldnets, window=c(320,520), pol="neg")) 
+
+Latency_P3_Pz_oldnets <- (p.measures(combo_old, Pz_oldnets, window=c(450,750), pol="pos"))
+Latency_P3_P4_oldnets <- (p.measures(combo_old, P4_oldnets, window=c(450,750), pol="pos"))
+Latency_P3_P3_oldnets <- (p.measures(combo_old, P3_oldnets, window=c(450,750), pol="pos"))
+
+
+datasets <- c("Latency_P2_FCz_oldnets", "Latency_P2_FC4_oldnets", "Latency_P2_FC3_oldnets",
+              "Latency_N2_FCz_oldnets", "Latency_N2_FC4_oldnets", "Latency_N2_FC3_oldnets",
+              "Latency_P3_Pz_oldnets", "Latency_P3_P4_oldnets", "Latency_P3_P3_oldnets")
+
+new_column_names1 <- c("Latency_P2_FCz", "Latency_P2_FC4", "Latency_P2_FC3",
+                      "Latency_N2_FCz", "Latency_N2_FC4", "Latency_N2_FC3",
+                      "Latency_P3_Pz", "Latency_P3_P4", "Latency_P3_P3")
+
+new_column_names2 <- c("PeakAmp_P2_FCz", "PeakAmp_P2_FC4", "PeakAmp_P2_FC3",
+                      "PeakAmp_N2_FCz", "PeakAmp_N2_FC4", "PeakAmp_N2_FC3",
+                      "PeakAmp_P3_Pz", "PeakAmp_P3_P4", "PeakAmp_P3_P3")
+
+rename_datasets_latency(datasets, new_column_names1, new_column_names2)
+
+datasets_list <- mget(datasets)
+
+df_merge2_old <- merge_datasets_latency(datasets_list) # use the function to merge the new data frames
+
+                
+# Combine the 2 dataframes
+ERP_oldnets <- full_join(df_merge1_old, df_merge2_old, by = c("Subject", "Trial Type"))
+
+head(ERP_oldnets)
+
+```
+
+#COMBINE OLD AND NEW DATASETS
+#CREATE A NEW VARIABLE CALLED N2-P2 DIFFERENCE
+#RE-SHAPE THE DATA
+#SAVE INTO A CSV FILE
+```{r}
+
+# Combine old +new
+ERP <- full_join(ERP_oldnets, ERP_newnets)
+
+# Remove Grand Ave from data, order by subject name and reset the index:
+ERP <- ERP[!(ERP$Subject=="Grand Avg"),]
+ERP <- with(ERP,  ERP[order(Subject) , ])
+rownames(ERP) <- NULL # Reset index
+
+# CREATE A NEW COLUMN by taking the difference between N2-P2
+ERP$MeanAmp_N2P2_FCz <- ERP$MeanAmp_N2_FCz - ERP$MeanAmp_P2_FCz
+ERP$PeakAmp_N2P2_FCz <- ERP$PeakAmp_N2_FCz - ERP$PeakAmp_P2_FCz
+
+ERP$MeanAmp_N2P2_FC4 <- ERP$MeanAmp_N2_FC4 - ERP$MeanAmp_P2_FC4
+ERP$PeakAmp_N2P2_FC4 <- ERP$PeakAmp_N2_FC4 - ERP$PeakAmp_P2_FC4
+
+ERP$MeanAmp_N2P2_FC3 <- ERP$MeanAmp_N2_FC3 - ERP$MeanAmp_P2_FC3
+ERP$PeakAmp_N2P2_FC3 <- ERP$PeakAmp_N2_FC3 - ERP$PeakAmp_P2_FC3
+
+# REORGANIZE STIMTAG VARIABLE AS TWO SEPERATE VARIABLES: EMOTION AND CONDITION - EACH WITH TWO LEVELS 
+ERP <- ERP %>%
+mutate(Emotion = str_extract(`Trial Type`, "Neut|Neg"),
+       Condition = str_extract(`Trial Type`, "Go|NoGo"))
+
+# RESHAPE TO LONG FORMAT
+
+ERP_long <- pivot_longer(ERP, 
+  cols = -c(Subject, `Trial Type`, `Condition`, `Emotion`), 
+  names_to = c(".value",  "Electrode"),
+  names_pattern = "^(MeanAmp_P2|MeanAmp_N2|MeanAmp_N2P2|MeanAmp_P3|PeakAmp_P2|PeakAmp_N2|PeakAmp_N2P2|PeakAmp_P3|Latency_P2|Latency_N2|Latency_P3)_(.+)$",
+  values_to = "Value"
+) %>%
+  mutate(
+    #Region = ifelse(grepl("^FC", Electrode), "Frontocentral",  "Parietal"),
+    Laterality = ifelse(grepl("4", Electrode), "Right", 
+               ifelse(grepl("3", Electrode), "Left", "Midline"))
+  ) 
+#  select(-Electrode)
+
+
+# MAKE IT COMPACT
+ERP_long <- ERP_long %>%
+  group_by(Subject, `Trial Type`, Emotion, Condition, Laterality) %>%
+  summarise(across(everything(), ~mean(., na.rm = TRUE)), .groups = 'drop')
+
+head(ERP_long)
+
+# Write to a csv file:
+write.csv(ERP_long, "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/ERP_long")
+
+
+```
+
+# LOAD AND MERGE WITH INTAKE (DEMOGRAPHICS AND CLINICAL ASSESSMENTS) INFO:
+* Load data exported from RedCap, named: Intake_Stuttering_Language_Varbls_for_Zoo_and_Reactivity
+* Feature engineer necessary variables and merge the above ERP dataset with TalkerGroup, Gender, Age info along with Stuttering and Language Scores
+
+```{r}
+
+# Load DataSet: 
+intake <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CognitiveEmotionalLi-IntakeDiagnosticData_DATA_2023-10-25_0818.csv')
+
+# Subject IDs include the visit number in the combo dataset if it is NOT the first time point. 
+# Do the same here: Combine visit number with subject and create a new Subject variable so that it matches the combo:
+intake <- intake  %>%
+  mutate(Subject = ifelse(redcap_event_name !="t1_arm_1", paste0(part_id_status, "T", visitnumber), part_id_status)) 
+
+# Create a new variable representing final sldper100words ("disfluency_sldper100words_final) by taking disfluency_sldper100words from CVD as primary, 
+# but in the case that this data is missing, take the disfluency scores from CVE:
+intake <- intake  %>%
+  mutate(disfluency_sldper100words_final = ifelse(!is.na(disfluency_sldper100words), disfluency_sldper100words, disfluency_sldper100words_cve)) 
+
+# Create a final talker group variable ("talkergroup_final) using disfluency_sldper100words_final and talker group based on parent report:
+# 1: CWS, 0:CWNS, 9:unidentified
+intake <- intake  %>%
+  mutate(talkergroup_final = ifelse((disfluency_sldper100words_final >= 3 | calculator_talkergroup_parent == 1), 1,
+                                          ifelse((disfluency_sldper100words_final < 3 & calculator_talkergroup_parent == 0), 0, 9)))  
+                    
+# Take the relevant columns from intake dataset
+# You may update this to take more columns into the dataset:
+intake <-  subset(intake, select=c('Subject','calculator_age_cve','calculator_gender_cve','race', 'ethnicity',
+                                   'calculator_talkergroup_parent','tso_calculated',
+                                   'disfluency_sldper100words','ssi_total', 
+                                   'disfluency_sldper100words_final', 'talkergroup_final',
+                                   "gfta_standard", "ppvt_standard", "evt_standard",             
+                                   'teld_rec_standard','teld_exp_standard', "teld_spokenlang_standard",
+                                   'tocs_1_total', 'tocs_2_total', 'tcs_total',
+                                   'eprime_condorder_zootask','cve_comments','comments_tasks','handedness_zoo'))
+
+# Merge with the main dataset using SUBJECT
+FULL <- merge(ERP_long, intake, by=c("Subject"), all.x = TRUE)
+head(FULL)  
+
+# Print the unique subject codes
+unique_codes<- unique(FULL$Subject)
+unique_codes <- as.data.frame(unique_codes)
+unique_codes
+
+# Making sure the Final FULL dataset has the all subjects coded (initially specified by SUBS - subject number):
+subs = 82
+(nrow(FULL)/12) == subs # This should give TRUE! 12 rows per subject
+```
+
+# MANUALLY ADD TALKER GROUP IS MISSING
+```{r}
+# Show the rows where talkergroup_final = 9 or NA :
+undefined_talkergroup <- subset(FULL, talkergroup_final == 9 |  is.na(talkergroup_final))
+print(unique(undefined_talkergroup$Subject))
+
+# FIND THE UNDEFINED (9) TALKER GROUPS AND MANUALLY MARK THEM AS EITHER 1 or 0 if needed:
+# Replace NA values in a specific column based on a condition:
+# FULL$talkergroup_final <- ifelse(FULL$Subject == "JA092118", 0, FULL$talkergroup_final)
+# FULL$talkergroup_final <- ifelse(FULL$Subject == "LG100721T2", 1, FULL$talkergroup_final)
+# FULL$talkergroup_final <- ifelse(FULL$Subject == "LW102219T3", 1, FULL$talkergroup_final)
+
+# Making sure no 9 or NA remained:
+any(FULL$talkergroup_final == 9 | is.na(FULL$talkergroup_final))
+```
+
+#PRINT THE NUMBER OF KIDS IN EACH GROUP
+```{r}
+# How many kids in each group?
+talkergroup_counts <- table(FULL$talkergroup_final)
+print(talkergroup_counts)/12
+```
+# ADD THE AVAILABLE LONGITUDINAL CATEGORIES IF AVAILABLE:
+
+```{r}
+
+# Load DataSet: 
+# longitudinal_groups <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/LongitudinalClassifications_9.10.23.csv')
+
+# Merge with the main dataset using SUBJECT
+# FULL <- merge(FULL, longitudinal_groups[, c("Subject", "Longitudinal_Group_0Rec_1Per_2Und")], by=c("Subject"), all.x = TRUE)
+
+# Making sure the Final FULL dataset has the all subjects coded (initially specified by SUBS - subject number):
+# (nrow(FULL)/4) == subs # This should give TRUE!
+
+# How many kids in each group?
+# longtgroup_counts <- table(FULL$Longitudinal_Group_0Rec_1Per_2Und)
+# print(longtgroup_counts)/4
+
+```
+
+# LOAD AND MERGE WITH BEHAVIORAL DATA:
+* for GO and NOGO conditions use ShowStim.RESP to compute the accuracy. 
+* ShowStim.RESP: 4 it means the child pushed the button (accurate for Go), NA means no response (accurate for NoGo). 
+
+Trials with responses faster than 200 ms were eliminated from the analysis, as they were too quick to reflect responding to the current stimulus.
+
+For each participant, the frequency of the following variables was recorded and stored: 
+(a) ‘hits - GO’ (when a Go-stimulus was followed by a response falling between 200 and 2300 ms after stimulus onset), 
+(b) ‘hits - NOGO’ (when a NoGo-stimulus was NOT followed by a response,
+(c) ‘misses - GO’ (when a Go stimulus was not followed by a response), 
+(d) ‘misses - NOGO - false alarm’ (when a NoGo stimuluswas followed by pressing the response button between 200 and 2300 ms after stimulus onset)
+(e-f) ‘premature responses - GO and NoGo’ (when the response button was pressed between 0 and 200 ms after stimulus onset). 
+(g) 'sensitivity' d': the z-transformed hit rate minus the z-transformed false alarm rate (Macmillan & Creelman, 2004). 
+A d' of zero indicates no ability to respond discriminately to the go and no-go stimuli. 
+d = z(H) - z(FA), where z(H) and z(FA) represent the transformation of the hit (correct go trials) and false alarm (commission error) rates to z-scores. 
+The variable d’ represents a measure of the perceptual sensitivity to different stimulus conditions, indicating how well participants can discriminate and appropriately respond to targets and non-targets, thus further inspecting cognitive control [56, 57].
+
+
+# Sensitivity scores, calculated using the formula d=z(H)−z(FA), provide a more detailed and nuanced understanding of the participant's performance in a Go-NoGo task, taking into account both hits and false alarms and providing insight into the ability to discriminate between Go and NoGo stimuli.
+
+# Inhibitory Control and Discrimination Ability:Sensitivity scores provide a more specific measure of the ability to discriminate between Go and NoGo trials.A higher sensitivity score indicates better discrimination ability and better inhibitory control.
+# Trade-off between Hits and False Alarms: Sensitivity takes into account both correct responses to Go trials (hits) and incorrect responses to NoGo trials (false alarms). It helps you understand the balance or trade-off between the child's ability to detect Go stimuli and their ability to withhold responses to NoGo stimuli.
+# Insight into Performance Patterns: A sensitivity score provides a more comprehensive view of performance patterns. For example, a high Go accuracy (90%) might suggest good attention, but a low NoGo accuracy (60%) could indicate a potential issue with inhibitory control. Sensitivity scores help integrate these aspects into a single measure.
+# Statistical Normalization:By transforming hit and false alarm rates into z-scores, sensitivity scores allow for statistical normalization. This can be particularly useful when comparing performance across different groups or conditions.
+
+For each participant, the frequency of the following variables was automatically recorded and stored: (a) ‘hits’ (when a Go-stimulus was followed by a response falling between 200 and 2300 ms after stimulus onset), (b) ‘misses’ (when a Go- stimulus was not followed by a response), (c) ‘false alarms’ (when a NoGo-stimulus was followed by pressing the response button between 200 and 2300 ms after stimulus onset), and (d) ‘premature responses’ (when the response button was pressed between 0 and 200 ms after stimulus onset). 
+
+
+```{r}
+# Load the file:
+accuracy <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/Eprime_01.09.24.csv')
+# Take only the relevant variables:
+accuracy <-  subset(accuracy, select=c('Name','VisitNumber','ShowStim.ACC','ShowStim.RESP','ShowStim.RT','StimTag'))
+
+
+# REORGANIZE STIMTAG VARIABLE AS TWO SEPERATE VARIABLES: EMOTION AND CONDITION - EACH WITH TWO LEVELS 
+accuracy <- accuracy %>%
+  mutate(
+    Emotion = str_extract(StimTag, "neu|neg"),
+    Condition = str_extract(StimTag, "G|N"),
+    Emotion = case_when(
+      Emotion == "neu" ~ "Neut",
+      Emotion == "neg" ~ "Neg",
+      TRUE ~ Emotion
+    ),
+    Condition = case_when(
+      Condition == "G" ~ "Go",
+      Condition == "N" ~ "NoGo",
+      TRUE ~ Condition
+    )
+  )
+
+# Convert all empty strings to NA
+accuracy <- replace(accuracy, accuracy == "", NA)
+# accuracy$ShowStim.RESP <- na_if(accuracy$ShowStim.RESP, "")
+
+# Combine visit number with subject and create a new Subject variable for eprime so that it matches the FULL
+accuracy <- accuracy  %>% 
+  mutate(Subject = ifelse(VisitNumber != 1, paste0(Name, "T", VisitNumber), Name)) 
+
+# Print unique subjects in FULL
+unique_subjects <- unique(FULL$Subject)
+
+# Filter 'accuracy' dataframe by using the Subjects in FULL dataset only
+accuracy <- accuracy[accuracy$`Subject` %in% unique_subjects, ]
+
+# Show the unique counts for ShowStim.RESP - which buttons were pressed - number 4 is the proper response button
+unique_codes <- unique(accuracy$ShowStim.RESP)
+counts <- as.data.frame(table(accuracy$ShowStim.RESP))
+counts
+
+# Check out the class types for each variable. 
+sapply(accuracy, class)
+# For ShowStim.RESP response 4 is a "character", not integer. 
+print(class(accuracy$ShowStim.RESP))
+# Convert character 4 for ShowStim.RESP to integer
+# accuracy$ShowStim.RESP <- as.integer(accuracy$ShowStim.RESP)
+
+# Remove the special character trials, and only keep those trials with proper number responses.
+unique(accuracy$ShowStim.RESP)
+accuracy <- accuracy[is.na(accuracy$ShowStim.RESP) | accuracy$ShowStim.RESP %in% c(1,2,3,4,5,6) , ]
+
+# Drop the 2 rows with NA in StimTag:
+accuracy <- accuracy[!is.na(accuracy$StimTag), ] 
+
+
+
+```
+# CREATE THE NEW VARIABLES:
+
+```{r}
+
+# Our max RT is 2023 SO no need to limit it. 
+
+accuracy <- accuracy %>%
+  mutate(behavior = case_when(
+    (ShowStim.RT >= 200 & ShowStim.RESP == 4) & (StimTag %in% c("negG", "neuG")) ~ "hit_go",
+    (ShowStim.RT == 0) & (StimTag %in% c("negG", "neuG")) ~ "miss_go",
+    (ShowStim.RT == 0 & (StimTag %in% c("negN", "neuN"))) ~ "hit_nogo",
+    (ShowStim.RT >= 200 & (ShowStim.RESP %in% 1:6) & (StimTag %in% c("negN", "neuN"))) ~ "miss_nogo_falsealarm",
+    (ShowStim.RT < 200 & ShowStim.RT > 0 & ShowStim.RESP %in% 1:6) & (StimTag %in% c("negG", "neuG")) ~ "premature_go",
+    (ShowStim.RT < 200 & ShowStim.RT > 0 & ShowStim.RESP %in% 1:6) & (StimTag %in% c("negN", "neuN")) ~ "premature_nogo",
+    TRUE ~ NA_character_   # is a catch-all condition that assigns `NA` to any rows that don't meet any of the previous conditions
+  ))
+
+```
+
+# CALCULATE THE PROPORTIONS:
+
+```{r}
+behavioral_measures <- accuracy %>%
+  group_by(Subject, Condition, Emotion) %>%
+  summarise(
+    
+  correct_go = sum(behavior == "hit_go", na.rm = TRUE),
+  incorrect_go = sum(behavior == "miss_go", na.rm = TRUE),
+  premature_go = sum(behavior == "premature_go", na.rm = TRUE),
+  total_go = (correct_go + incorrect_go + premature_go),
+  accuracy_go_proportion = (correct_go / total_go) *100,
+  hit_rate = accuracy_go_proportion/100,
+  premature_go_proportion = (premature_go / (correct_go + premature_go))*100,
+  
+  correct_nogo = sum(behavior == "hit_nogo", na.rm = TRUE),
+  incorrect_nogo = sum(behavior == "miss_nogo_falsealarm", na.rm = TRUE), 
+  premature_nogo = sum(behavior == "premature_nogo", na.rm = TRUE),
+  total_nogo = (correct_nogo + incorrect_nogo + premature_nogo),
+  accuracy_nogo_proportion = (correct_nogo / total_nogo) *100, 
+  false_alarm_proportion = (incorrect_nogo / total_nogo) *100,
+  false_alarm_rate = false_alarm_proportion/100,
+  premature_nogo_proportion = ifelse(incorrect_nogo == 0 & premature_nogo == 0, 0, 100 * premature_nogo / max(incorrect_nogo + premature_nogo, 1)), #In this formula, the `ifelse()` function checks if the sum of `incorrect_nogo` and `premature_nogo` is equal to 0. If it is, `premature_nogo_proportion` is set to 0. If the sum is not equal to 0, the original formula is used to calculate `premature_nogo_proportion. By using the max function with the constant 1, the formula guarantees a minimum denominator of 1, preventing division by zero errors. 
+  
+  # Calculate reaction times: 
+  RT_proper_go = mean(ShowStim.RT[behavior == "hit_go"], na.rm = TRUE),
+  RT_proper_nogo = mean(ShowStim.RT[behavior == "miss_nogo_falsealarm"], na.rm = TRUE),
+  RT_premature_go = mean(ShowStim.RT[behavior == "premature_go"], na.rm = TRUE),
+  RT_premature_nogo = mean(ShowStim.RT[behavior == "premature_nogo"], na.rm = TRUE)
+  
+  # RT_proper_go = mean(ifelse(ShowStim.RT >= 200 & ShowStim.RESP == 4 & (StimTag == 'neuG' | StimTag == 'negG'), ShowStim.RT, NA), na.rm = TRUE),
+  # RT_proper_nogo = mean(ifelse(ShowStim.RT >= 200 & ShowStim.RESP %in% 1:6 & (StimTag == 'neuN' | StimTag == 'negN'), ShowStim.RT, NA), na.rm = TRUE),
+  # Calculate reaction time for ALL including premature responses
+  # RT_all_go = mean(ifelse((StimTag == 'neuG' | StimTag == 'negG') & ShowStim.RT != 0, ShowStim.RT, NA), na.rm = TRUE),
+  # RT_all_nogo = mean(ifelse((StimTag == 'neuN' | StimTag == 'negN') & ShowStim.RT != 0, ShowStim.RT, NA), na.rm = TRUE)
+  )
+
+```
+
+
+# See how many kids have missing accuracy data and manually add them:
+# ADD THIS KID MANUALLY _ ACCURACY TAKEN FROM NETSTATION:
+
+```{r}
+
+# Get unique Subject IDs in the ZOO dataset
+zoo_subjects <- unique(FULL$Subject)
+
+# Get unique Subject IDs in the accuracy_proportions dataset
+acc_subjects <- unique(behavioral_measures$Subject)
+
+# Identify Subject IDs present in the ZOO dataset but not in the accuracy_proportions dataset
+missing_subjects <- zoo_subjects[!(zoo_subjects %in% acc_subjects)]
+
+# Print the missing Subject IDs
+print(missing_subjects)
+
+# Create a new data frame with the additional rows
+new_rows <- data.frame(Subject = rep("RB101619", 4),
+                       Condition = c("Go", "Go", "NoGo", "NoGo"),
+                       Emotion = c("Neg", "Neut", "Neg", "Neut"),
+                       accuracy_go_proportion = c(99, 99, NA, NA),
+                       accuracy_nogo_proportion = c(NA, NA, 42.5, 50),
+                       hit_rate = c(.99, .99, NA, NA),
+                       false_alarm_rate = c(NA, NA, .425, .5))
+                       
+
+# Append the new rows to the existing dataset
+behavioral_measures <- rbind(behavioral_measures, new_rows)
+
+# Make sure newly added Subject has data now
+behavioral_measures[behavioral_measures$Subject == "RB101619",]
+
+```
+
+# Combine accuracy go and accuracy nogo together,  premature go and nogo together, and RT go and RT nogo together:
+# Since 'accuracy_go' and 'accuracy_nogo' do not overlap (one of them is always NA for a given row), you can use the `coalesce` function to pick the non-NA value
+
+```{r}
+
+behavioral_measures <- behavioral_measures %>%
+  mutate(
+    accuracy = coalesce(accuracy_go_proportion, accuracy_nogo_proportion),
+    hit_falsealarm = coalesce(hit_rate, false_alarm_rate),
+    premature_responses = coalesce(premature_go_proportion, premature_nogo_proportion),
+    RT_proper = coalesce(RT_proper_go, RT_proper_nogo),
+    RT_premature = coalesce(RT_premature_go, RT_premature_nogo))
+
+# Calculate z_hit and z_false_alarm and then calculate sensitivity d'- d prime
+# Calculate z-scores for hit rate and false alarm rate using the invNorm function
+
+behavioral_measures$hit_rate <- ifelse(behavioral_measures$hit_rate == 1, 0.9999999, behavioral_measures$hit_rate)
+behavioral_measures$false_alarm_rate <- ifelse(behavioral_measures$false_alarm_rate == 0, 0.0000001, behavioral_measures$false_alarm_rate)
+
+behavioral_measures <- behavioral_measures %>%
+group_by(Subject, Emotion) %>%
+  mutate(
+    z_hit = qnorm(hit_rate),
+    z_false_alarm = qnorm(false_alarm_rate),
+    sensitivity = (z_hit[Condition == "Go"] - z_false_alarm[Condition == "NoGo"])
+    ) %>%
+  ungroup()
+
+# Subset to main variables only
+eprime <-  subset(behavioral_measures, select=c('Subject', "Condition", "Emotion", "accuracy", "hit_falsealarm", "premature_responses", "RT_proper", "RT_premature", "sensitivity"))
+
+head(eprime)
+
+```
+
+# COMBINE FULL WITH EPRIME
+
+```{r}
+
+# COMBINE ALL!!
+ZOO <- merge(FULL, eprime, by=c("Subject", "Condition", "Emotion"), all.x = TRUE)
+head(ZOO)
+
+```
+
+# LOAD and merge with trail numbers DF
+
+```{r}
+# Load the file:
+# trialnum <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/Zoo_trialnumber_used_10.03.23.csv')
+
+# convert the dataset to long format:
+# id.vars argument specifies which columns in the original data frame should remain as they are without being transformed.
+# measure.vars argument specifies which columns in the original data frame should be melted
+# The variable.name argument specifies the name of the new column that will store the variable names from the measure.vars
+# The value.name argument specifies the name of the new column that will store the values from the measure.vars.
+# trialnum_long <- melt(trialnum, id.vars = c("Subject"),
+#                      measure.vars = c("NeutNoGo","NeutGo",
+#                                       "NegNoGo", "NegGo"), 
+#                      variable.name = "StimTag", 
+#                      value.name ="TrialNum")
+
+# ZOO <- merge(ZOO, trialnum_long, by=c("Subject", "Condition", "Emotion"), all.x = TRUE)
+
+```
+
+
+#COMPUTE AND ADD BRIEF SCORES
+
+
+# INHIBIT: This scale assesses inhibitory control and impulsivity. Higher scores indicate greater difficulty in resisting impulses and stopping one's behavior at the appropriate time.
+
+# SHIFT: The Shift scale assesses the ability to move freely from one situation, activity, or aspect of a problem to another as the circumstances demand. It includes aspects such as making transitions, tolerating change, problem-solving flexibly, switching attention, and changing focus.The ability to shift attention and adapt to changing demands is relevant to tasks like the Go NoGo task, and a correlation may be observed between the Shift scale and behavioral accuracy.
+
+# emotionalCntrl: The Emotional Control scale measures the impact of executive function problems on emotional expression and assesses a child’s ability to modulate or control emotional responses.Emotional control is relevant to behavioral accuracy, especially in tasks that may evoke emotional responses. This scale could also be relevant to N2 and P3 components, as these components are associated with cognitive and attentional processes.
+```{r}
+# Load the file:
+brief <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/Brief.csv')
+
+# Drop all rows that has an NA for the first three items (assuming the rest is empty too)
+brief <- brief[complete.cases(brief[, c("brief1", "brief2", "brief3")]), ]
+
+# replace individual NA values with 2 (the average score)
+brief <- replace(brief, is.na(brief), 2)
+
+
+# BRIEF PRESCHOOL AGED:
+
+brief <- brief %>%
+  mutate(inhibit = brief3 + brief8 + brief13 + brief18 + brief23 + brief28 + brief33 + brief38 + brief43 + brief48 + brief52 + brief54 + brief56 + brief58 + brief60 + brief62,
+         shift = brief5 + brief10 + brief15 + brief20 + brief25 + brief30 + brief35 + brief40 + brief45 + brief50,
+         emotionalCntrl = brief1 + brief6 + brief11 + brief16 + brief21 + brief26 + brief31 + brief36 + brief41 + brief46,
+         workingMemory = brief2 + brief7 + brief12 + brief17 + brief22 + brief27 + brief32 + brief37 + brief42 + brief47 + brief51 + brief53 + brief55 + brief57 + brief59 + brief61 + brief63,
+         planOrganize = brief4 + brief9 + brief14 + brief19 + brief24 + brief29 + brief34 + brief39 + brief44 + brief49,
+         InhibitorySelfControlIndex_ISCI  = inhibit + emotionalCntrl,
+         FlexibilityIndex_FI  = shift + emotionalCntrl,
+         BehavioralRegulationIndex_BRI = inhibit + shift + emotionalCntrl,
+         MetacognitionIndex_MI  = workingMemory + planOrganize,
+         GlobalExecutiveComposite_GEC = BehavioralRegulationIndex_BRI + MetacognitionIndex_MI) %>%
+  dplyr::select(part_id_status, redcap_event_name, inhibit:GlobalExecutiveComposite_GEC) # with select specify it is dplyr, because it conflicts with other packages. 
+
+
+# Create the Subject code with time stamp
+brief <- brief %>% 
+  mutate(
+    Subject = case_when(grepl("t1_arm_1", redcap_event_name) ~ paste0(part_id_status),
+                        grepl("t2_arm_1", redcap_event_name) ~ paste0(part_id_status, "T2"),
+                        grepl("t3_arm_1", redcap_event_name) ~ paste0(part_id_status, "T3"),
+                        grepl("t4_arm_1", redcap_event_name) ~ paste0(part_id_status, "T3"),
+                        TRUE ~ NA_character_)
+    ) 
+
+
+# BRIEF SCHOOL AGED:
+
+# Load the file:
+brief_s <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/Brief_s.csv')
+
+# Drop all rows that has an NA for the first three items (assuming the rest is empty too)
+brief_s <- brief_s[complete.cases(brief_s[, c("brief1s", "brief2s", "brief3s")]), ]
+
+# replace individual NA values with 2 (the average score)
+brief_s <- replace(brief_s, is.na(brief_s), 2)
+
+
+brief_s <- brief_s %>%
+  mutate(inhibit = brief38s + brief41s + brief43s + brief44s + brief49s + brief54s + brief55_s + brief56s + brief59s + brief65s,
+         shift = brief5s + brief6s + brief8s + brief12s + brief13s + brief23s + brief30s + brief39s,
+         emotionalCntrl = brief1s + brief7s + brief20s + brief25s + brief26s + brief45s + brief50s + brief62s + brief64s + brief70s,
+         initiate = brief3s + brief10s + brief16s + brief47s + brief48s + brief61s + brief66s + brief71s,
+         workingMemory = briefs11s + brief15s + brief18s + brief22s + brief28s + brief35s + brief36s + brief40s + brief46s + brief51s + brief53s + brief58s,
+         planOrganize = brief4s + brief9s + brief14s + brief19s + brief24s + brief29s + brief34s + brief39s + brief44s + brief49s,
+         orgofMaterials = brief4s + brief29s + brief67s + brief68s + brief69s + brief72s,
+         monitor = brief14s + brief21s + brief31s + brief34s + brief42s + brief52s + brief60s + brief63_s,
+         # composite scales:
+         BehavioralRegulationIndex_BRI = inhibit + shift + emotionalCntrl,
+         MetacognitionIndex_MI = initiate + workingMemory + planOrganize + orgofMaterials + monitor,
+         GlobalExecutiveComposite_GEC = BehavioralRegulationIndex_BRI + MetacognitionIndex_MI)  %>%
+  dplyr::select(part_id_status, redcap_event_name, inhibit:GlobalExecutiveComposite_GEC)
+
+# Create the Subject code with time stamp
+brief_s <- brief_s %>% 
+  mutate(
+    Subject = case_when(grepl("t1_arm_1", redcap_event_name) ~ paste0(part_id_status),
+                        grepl("t2_arm_1", redcap_event_name) ~ paste0(part_id_status, "T2"),
+                        grepl("t3_arm_1", redcap_event_name) ~ paste0(part_id_status, "T3"),
+                        grepl("t4_arm_1", redcap_event_name) ~ paste0(part_id_status, "T4"),
+                        TRUE ~ NA_character_)
+    ) 
+
+
+# Merge them together
+# In the by section list all common variable names: 
+brief_merged <- merge(brief, brief_s, by = c("Subject", "part_id_status", "redcap_event_name", "inhibit", "shift", "emotionalCntrl", "workingMemory", "planOrganize", "BehavioralRegulationIndex_BRI", "MetacognitionIndex_MI", "GlobalExecutiveComposite_GEC", "inhibit", "shift", "inhibit", "shift"), all = TRUE)
+
+
+# Merge with ZOO
+ZOO <- merge(ZOO, brief_merged, by=c("Subject"), all.x = TRUE)
+
+# 2 KIDS DATA IS MISSING
+# unique(ZOO$Subject[is.na(ZOO$inhibit)])
+# [1] "GB012717" "OG013016"
+
+```
+
+
+#COMPUTE AND ADD CBQ SCORES
+
+```{r}
+# Load the file:
+cbq <- read.csv(file = '/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CBQ.csv')
+
+# Calculate percentage of NA values in each row
+# na_percent <- rowSums(is.na(cbq))/ncol(cbq)
+# Subset rows with less than 70% NA values
+# cbq <- cbq[na_percent < 0.7, ]
+
+# Define a function to calculate r values
+subtract_eight <- function(x) {
+8 - x
+}
+# Apply the function to columns cbq0001 through cbq0195
+cbq <- cbq %>%
+mutate(across(matches("^cbq0[01][0-9][0-9]$"), subtract_eight, .names = "{col}r"))
+
+#Calculate the sub scales - create new variables
+cbq <- cbq %>%
+mutate(
+  act = rowMeans(dplyr::select(., cbq0001, cbq0025, cbq0041r, cbq0048, cbq0088r, cbq0102r, cbq0123r, cbq0126r, cbq0145r, cbq0152, cbq0172, cbq0187, cbq0192r), na.rm = TRUE),
+  fru = rowMeans(dplyr::select(., cbq0002, cbq0019r, cbq0034, cbq0062, cbq0073, cbq0078, cbq0120r, cbq0128, cbq0140, cbq0156r, cbq0173, cbq0181, cbq0193), na.rm = TRUE),
+  app = rowMeans(dplyr::select(., cbq0010, cbq0024, cbq0035, cbq0069, cbq0082, cbq0096, cbq0117, cbq0131r, cbq0148, cbq0166, cbq0175r, cbq0188r, cbq0191r), na.rm = TRUE),
+  attfo = rowMeans(dplyr::select(., cbq0016, cbq0038r, cbq0047r, cbq0125, cbq0144, cbq0160, cbq0171r, cbq0186, cbq0195r), na.rm = TRUE),
+  attshi = rowMeans(dplyr::select(., cbq0006r, cbq0029, cbq0095r, cbq0180, cbq0184r), na.rm = TRUE),
+  dis = rowMeans(dplyr::select(., cbq0005r, cbq0021, cbq0061, cbq0087, cbq0097, cbq0101r, cbq0115, cbq0132, cbq0141, cbq0157, cbq0178, cbq0190r), na.rm = TRUE),
+  sth = rowMeans(dplyr::select(., cbq0014r, cbq0027, cbq0042, cbq0053r, cbq0068r, cbq0085, cbq0092, cbq0103, cbq0118, cbq0134, cbq0150r, cbq0167r, cbq0177), na.rm = TRUE),
+  fea = rowMeans(dplyr::select(., cbq0015r, cbq0040, cbq0050, cbq0058r, cbq0070r, cbq0080, cbq0091, cbq0130, cbq0138r, cbq0161r, cbq0176r, cbq0189), na.rm = TRUE),
+  hip = rowMeans(dplyr::select(., cbq0008, cbq0022, cbq0030r, cbq0051r, cbq0060r, cbq0067, cbq0077, cbq0100, cbq0107, cbq0124, cbq0139, cbq0159r, cbq0182), na.rm = TRUE),
+  imp = rowMeans(dplyr::select(., cbq0013, cbq0026, cbq0046, cbq0059, cbq0071r, cbq0079r, cbq0090r, cbq0104, cbq0114, cbq0137r, cbq0155, cbq0169r, cbq0183r), na.rm = TRUE),
+  inh = rowMeans(dplyr::select(., cbq0004, cbq0020, cbq0032r, cbq0063, cbq0075, cbq0093r, cbq0108r, cbq0116, cbq0136, cbq0147, cbq0162r, cbq0168, cbq0185), na.rm = TRUE),
+  lip = rowMeans(dplyr::select(., cbq0012r, cbq0036, cbq0054, cbq0066r, cbq0076,cbq0111r, cbq0113, cbq0133, cbq0146, cbq0151,cbq0164, cbq0174), na.rm = TRUE),
+  per = rowMeans(dplyr::select(., cbq0009, cbq0028r, cbq0031, cbq0052, cbq0065,cbq0084r, cbq0098, cbq0105, cbq0122r, cbq0142r,cbq0154, cbq0170r), na.rm = TRUE),
+  sad = rowMeans(dplyr::select(., cbq0018, cbq0039, cbq0044, cbq0055, cbq0064,cbq0072r, cbq0081, cbq0094, cbq0109r, cbq0112r,cbq0127, cbq0149r), na.rm = TRUE),
+  shy = rowMeans(dplyr::select(., cbq0007, cbq0017r, cbq0023r, cbq0037,cbq0045r, cbq0057r, cbq0074, cbq0089, cbq0106,cbq0119r, cbq0129r, cbq0143, cbq0158r), na.rm = TRUE),
+  smi =rowMeans(dplyr::select(., cbq0011, cbq0043r, cbq0056, cbq0083r,cbq0099r, cbq0110, cbq0121r, cbq0135r, cbq0152,cbq0163, cbq0165r, cbq0179, cbq0194), na.rm = TRUE)
+)
+
+
+cbq <- cbq %>%
+  mutate(shy_r=(8-shy)) %>%
+  mutate(sth_r=(8-sth)) %>%
+  rename(activity_level = act) %>%
+  rename(anger_frustration = fru) %>%
+  rename(approach = app) %>%
+  rename(attention_focus = attfo) %>%
+  rename(attention_shift = attshi) %>%
+  rename(discomfort = dis) %>%
+  rename(soothability = sth) %>%
+  rename(fear = fea) %>%
+  rename(hi_intense_pleas = hip) %>%
+  rename(impulsivity = imp) %>%
+  rename(inhibit_control = inh) %>%
+  rename(lo_instense_pleas = lip) %>%
+  rename(percept_sensitive = per) %>%
+  rename(sadness = sad) %>%
+  rename(shyness = shy) %>%
+  rename(smiling_laughter = smi)
+
+           
+cbq <- cbq %>%
+  mutate(surgency = rowMeans(dplyr::select(.,  activity_level,hi_intense_pleas, impulsivity, shy_r)),
+         effortful_con = rowMeans(dplyr::select(.,  attention_focus, inhibit_control,lo_instense_pleas, percept_sensitive)),
+         neg_affect = rowMeans(dplyr::select(.,  anger_frustration, discomfort,fear, sadness, sth_r))) %>% 
+  dplyr::select(part_id_status, redcap_event_name, activity_level:neg_affect)
+
+
+# Create the Subject code with time stamp
+cbq <- cbq %>% 
+  mutate(
+    Subject = case_when(grepl("t1_arm_1", redcap_event_name) ~ paste0(part_id_status),
+                        grepl("t2_arm_1", redcap_event_name) ~ paste0(part_id_status, "T2"),
+                        grepl("t3_arm_1", redcap_event_name) ~ paste0(part_id_status, "T3"),
+                        TRUE ~ NA_character_)
+    )
+
+# Merge with ZOO
+ZOO <- merge(ZOO, cbq, by=c("Subject"), all.x = TRUE)
+
+
+```
+
+
+# WRITE THE FINAL DATAFRAME INTO CSV AND SAVE TO LOCAL DRIVE:
+```{r}
+
+# WRITE THE FINAL DATAFRAME INTO CSV AND SAVE TO LOCAL DRIVE:
+write.csv(ZOO, "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/ZOO.csv")
+head(ZOO)
+
+```
+
+
+# REMOVE THESE KIDS BASED ON  LOWER ACCURACY + NEGATIVE EEG COMMENTS:
+
+```{r}
+ZOO_bad_subjects <- ZOO %>%
+  group_by(Subject) %>%
+  filter(all(accuracy[`Trial Type` == "NeutNoGo"] <= 40) |
+         all(accuracy[`Trial Type` == "NegNoGo"] <= 40) |
+         all(accuracy[`Trial Type` == "NeutGo"] <= 70) |
+         all(accuracy[`Trial Type` == "NegGo"] <= 70))
+
+bad_subjects = unique(ZOO_bad_subjects$Subject)
+bad_subjects
+
+# READ THE COMMENTS FOR THOSE LOW ACCURACY KIDS:
+ZOO_filtered <- dplyr::filter(ZOO, Subject %in% bad_subjects)
+ZOO_filtered <-  subset(ZOO_filtered, select=c('Subject','talkergroup_final','Trial Type','accuracy', 'calculator_age_cve','RT_proper', 'cve_comments','comments_tasks','handedness_zoo'))
+ZOO_filtered <- ZOO_filtered %>% distinct() # Use distinct function to remove duplicates
+print(ZOO_filtered)
+
+```
+
+# REMOVE THESE KIDS with <30% accuracy in Nogo, and <60% in Go. 
+
+```{r}
+
+subjects_to_remove <- c("EG030618","HH061919","WS051018")      
+
+ZOO_good <- ZOO
+ZOO_good <- dplyr::filter(ZOO_good, !Subject %in% subjects_to_remove)
+
+write.csv(ZOO_good, "/Users/aysuerdemir/Desktop/R workspace/ERP_Zoo/CrossSectional/Mix/ZOO_good.csv")
+
+```
+
+
+# DRAW N2P2 and P3 WAVEFORM GRAPHS YOURSELF
+
+```{r}
+
+# Calculate the average of specific columns (as specificed by these electrode numbers below) across all rows and create a new column with these averages
+# Combine all conditions together into a single dataframe
+# This step is necessary to reverse the unclass() function we have used above. 
+# We need to create subsets from the original combo dataset first ADN THEN unclass before using m.measures()
+combo_new <- rbind.data.frame(neg_go, neg_nogo, neut_go, neut_nogo) 
+combo_old <- rbind.data.frame(neg_go_old, neg_nogo_old, neut_go_old, neut_nogo_old) 
+
+# Add the "talkergroup_final" column from the "FULL" dataset to the "combo" dataset based on the common "Subject" column
+combo_with_group_new <- combo_new %>%
+  mutate(talkergroup_final = FULL$talkergroup_final[match(Subject, FULL$Subject)])
+
+combo_with_group_old <- combo_old %>%
+  mutate(talkergroup_final = FULL$talkergroup_final[match(Subject, FULL$Subject)])
+
+# REMOVE THESE THREE KIDS FROM THE DATASET:
+combo_with_group_new <- dplyr::filter(combo_with_group_new, Subject!="EG030618", Subject!="HH061919", Subject!="WS051018")
+
+
+# CREATE MEAN N2P2 AND P3 VALUES FOR EACH ROW (TIMEPOINT) USING THE SPECIFIED ELECTRODE NUMBERS 
+
+newnet_rawdata <- combo_with_group_new  %>%
+    mutate(
+    N2P2_waveform = rowMeans(dplyr::select(., all_of(FCz_newnets))),
+    P3_waveform = rowMeans(dplyr::select(., all_of(Pz_newnets)))
+    )
+
+oldnet_rawdata <- combo_with_group_old  %>%
+    mutate(
+    N2P2_waveform = rowMeans(dplyr::select(., all_of(FCz_oldnets))),
+    P3_waveform = rowMeans(dplyr::select(., all_of(Pz_oldnets)))
+    )
+
+# Combine old and new net data together:
+rawdata <- full_join(newnet_rawdata, oldnet_rawdata)
+
+
+# How many kids in each group?
+talkergroup_counts <- table(rawdata$talkergroup_final)
+print(talkergroup_counts)/(275*4)
+
+
+# CREATE A SINGLE SUMMARY WAVEFORM FOR N2P2 AND P3 ACROSS ALL PARTICIPANTS IN EACH GROUP
+summary_waveforms <-
+  rawdata %>%
+  group_by(Stimulus, Time, talkergroup_final) %>%
+  summarise(Average_N2P2 = mean(N2P2_waveform),Average_P3 = mean(P3_waveform) )
+  
+
+# Define the X-axis vertical lines
+vertical_lines1 <- c(180, 320, 550)  # Specify the X-axis positions
+# Define the X-axis vertical lines
+vertical_lines2 <- c(400, 750)  # Specify the X-axis positions
+
+#Red
+line_colors <- c("NeutGo" = "#D6E4F0", "NeutNoGo" = "#0000CD", "NegGo" = "#FFB6B6", "NegNoGo" = "#FF0000")
+# line_colors <- c("NeutGo" = "lightskyblue1", "NeutNoGo" = "mediumblue", "NegGo" = "pink1", "NegNoGo" = "red2")
+
+# DRAW THE GRAPHS
+CWNS_N2P2_waveform <- ggplot(data = subset(summary_waveforms, talkergroup_final == 0), 
+aes(x = Time, y = Average_N2P2, color = Stimulus)) +
+  geom_line(stat = "identity", size = 1.5) +
+  labs(x = "Time (ms)", y = "Amplitude in Microvolts (μV)") +
+  scale_x_continuous(limits = c(-100, 900), breaks = seq(-100, 900, 100), position = "top") +
+  scale_y_continuous(limits = c(-15, 2), breaks = seq(-14, 2, 2)) +
+  scale_color_manual(values = line_colors, labels = c("Affective Go", "Affective NoGo","Neutral Go", "Neutral NoGo")) +  # Set line colors manually
+  theme(
+    axis.text = element_text(size = 14, color = "black"),
+    axis.title = element_text(size = 14),
+    plot.background = element_rect(fill = "white"),
+    axis.line = element_line(linetype = "solid", color = "gray10", size = 1.4),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    legend.text = element_text(size = 12), 
+    legend.title =element_blank()
+    ) +
+  geom_vline(xintercept = vertical_lines1, color = "gray50", linetype = "dashed") +
+  geom_hline(yintercept = 0, color = "gray70", linetype = "dotted") +
+  geom_vline(xintercept = 0, color = "gray70", linetype = "dotted") +
+  ggtitle("CWNS N2P2 Activity") +
+  theme(plot.title = element_text(hjust = 0.5, size = 24, face = "bold", vjust = 2)) +
+  theme(legend.position = c(.85, .2))  # Set the position of the legend
+plot(CWNS_N2P2_waveform)
+
+
+CWS_N2P2_waveform <- ggplot(data = subset(summary_waveforms, talkergroup_final == 1), 
+aes(x = Time, y = Average_N2P2, color = Stimulus)) +
+  geom_line(stat = "identity", size = 1.3) +
+  labs(x = "Time (ms)", y = "Amplitude in Microvolts (μV)") +
+  scale_x_continuous(limits = c(-100, 900), breaks = seq(-100, 900, 100), position = "top") +
+  scale_y_continuous(limits = c(-15, 2), breaks = seq(-14, 2, 2)) +
+  scale_color_manual(values = line_colors, labels = c("Affective Go", "Affective NoGo","Neutral Go", "Neutral NoGo")) +  # Set line colors manually
+  theme(
+    axis.text = element_text(size = 14 , color = "black"),
+    axis.title = element_text(size = 14),
+    plot.background = element_rect(fill = "white"),
+    axis.line = element_line(linetype = "solid", color = "gray10", size = 1.4),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    legend.text = element_text(size = 12), 
+    legend.title =element_blank()
+  ) +
+  geom_vline(xintercept = vertical_lines1, color = "gray50", linetype = "dashed") +
+  geom_hline(yintercept = 0, color = "gray70", linetype = "dotted") +
+  geom_vline(xintercept = 0, color = "gray70", linetype = "dotted") +
+  ggtitle("CWS N2P2 Activity") +
+  theme(plot.title = element_text(hjust = 0.5, size = 24, face = "bold", vjust = 2)) +
+  theme(legend.position = c(.85, .2))  # Set the position of the legend
+plot(CWS_N2P2_waveform)  
+
+
+CWNS_P3_waveform <- ggplot(data = subset(summary_waveforms, talkergroup_final == 0), 
+aes(x = Time, y = Average_P3, color = Stimulus)) +
+  geom_line(stat = "identity", size = 1.3) +
+  labs(x = "Time (ms)", y = "Amplitude in Microvolts (μV)") +
+  scale_x_continuous(limits = c(-100, 900), breaks = seq(-100, 900, 100), position = "top")+
+  scale_y_continuous(limits = c(-2, 13), breaks = seq(-2, 13, 2)) +
+  scale_color_manual(values = line_colors, labels = c("Affective Go", "Affective NoGo","Neutral Go", "Neutral NoGo")) +  # Set line colors manually
+  theme(
+    axis.text = element_text(size = 14, color = "black"),
+    axis.title = element_text(size = 14),
+    plot.background = element_rect(fill = "white"),
+    axis.line = element_line(linetype = "solid", color = "gray10", size = 1.4),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    legend.text = element_text(size = 12), 
+    legend.title =element_blank()
+  ) +
+  geom_vline(xintercept = vertical_lines2, color = "gray50", linetype = "dashed") +
+  geom_hline(yintercept = 0, color = "gray70", linetype = "dotted") +
+  geom_vline(xintercept = 0, color = "gray70", linetype = "dotted") +
+  ggtitle("CWNS P3 Activity") +
+  theme(plot.title = element_text(hjust = 0.5, size = 24, face = "bold", vjust = 2)) +
+    theme(legend.position = c(.65, .3))
+plot(CWNS_P3_waveform)
+
+CWS_P3_waveform <- ggplot(data = subset(summary_waveforms, talkergroup_final == 1),
+aes(x = Time, y = Average_P3, color = Stimulus)) +
+  geom_line(stat = "identity", size = 1.3) +
+  labs(x = "Time (ms)", y = "Amplitude in Microvolts (μV)") +
+  scale_x_continuous(limits = c(-100, 900), breaks = seq(-100, 900, 100), position = "top")+
+  scale_y_continuous(limits = c(-2, 13), breaks = seq(-2, 13, 2)) +
+  scale_color_manual(values = line_colors, labels = c("Affective Go", "Affective NoGo","Neutral Go", "Neutral NoGo")) +  # Set line colors manually
+  theme(
+    axis.text = element_text(size = 14 , color = "black"),
+    axis.title = element_text(size = 14),
+    plot.background = element_rect(fill = "white"),
+    axis.line = element_line(linetype = "solid", color = "gray10", size = 1.4),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(),
+    legend.text = element_text(size = 12), 
+    legend.title =element_blank()
+  ) +
+  geom_vline(xintercept = vertical_lines2, color = "gray50", linetype = "dashed") +
+  geom_hline(yintercept = 0, color = "gray70", linetype = "dotted") +
+  geom_vline(xintercept = 0, color = "gray70", linetype = "dotted") +
+  ggtitle("CWN P3 Activity") +
+  theme(plot.title = element_text(hjust = 0.5, size = 24, face = "bold", vjust = 2)) +
+  theme(legend.position = c(.65, .3))
+plot(CWS_P3_waveform)  
+
+```
+
+
+
+
+
